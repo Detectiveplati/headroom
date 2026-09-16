@@ -210,7 +210,7 @@ export function categorizeTransaction(
       let type: TransactionType = 'expense';
       if (savedCategory === 'Salary & Income' || (credit > 0 && isIncomeKeyword)) {
         type = 'income';
-      } else if (savedCategory === 'Transfer / Payment') {
+      } else if (savedCategory === 'Transfer / Payment' || savedCategory === 'PayNow Transfers') {
         type = 'transfer';
       } else if (credit > 0 && debit === 0) {
         type = 'refund';
@@ -265,6 +265,14 @@ export function categorizeTransaction(
   }
 
   const amount = debit > 0 ? debit : credit;
+
+  // Personal PayNow transfers are not merchant spending. A UEN or business-shaped
+  // recipient stays uncategorized so the AI/manual review can identify the establishment.
+  const isPayNow = /\bPAYNOW\b/.test(upper);
+  const isBusinessPayNow = /\bUEN\b|\bPTE\.?\s*LTD\b|\bLTD\b|\bLLP\b|\bLLC\b|\bINC\b|\bCO\.?\b|\bCOMPANY\b|\bENTERPRISE\b|\bTRADING\b|\bSHOP\b|\bSTORE\b|\bCAFE\b|\bRESTAURANT\b|\bCLINIC\b|\bSCHOOL\b|\bSGQR\b/.test(upper);
+  if (isPayNow && !isBusinessPayNow) {
+    return { cleanMerchant: cleanName, category: 'PayNow Transfers', type: 'transfer', amount };
+  }
 
   // 3. Supermarkets / Groceries
   if (
@@ -528,4 +536,3 @@ export function parseBankStatementCsv(
     duplicateCount,
   };
 }
-

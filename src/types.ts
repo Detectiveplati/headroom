@@ -73,6 +73,7 @@ export type ExpenseCategory =
   | 'Personal Care & Services'
   | 'Bills & Utilities'
   | 'Transfer / Payment'
+  | 'PayNow Transfers'
   | 'Uncategorized';
 
 export type AccountType = 'debit' | 'credit' | 'cash';

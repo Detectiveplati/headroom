@@ -61,6 +61,7 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'Personal Care & Services',
   'Bills & Utilities',
   'Transfer / Payment',
+  'PayNow Transfers',
   'Uncategorized',
 ];
 
@@ -128,6 +129,9 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       }
 
       return true;
+    }).sort((a, b) => {
+      const categoryPriority = Number(b.category === 'Uncategorized') - Number(a.category === 'Uncategorized');
+      return categoryPriority || b.createdAt - a.createdAt;
     });
   }, [transactions, selectedAccountId, selectedCategory, selectedType, selectedMonth, searchQuery]);
 
@@ -172,6 +176,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       'Personal Care & Services': 0,
       'Bills & Utilities': 0,
       'Transfer / Payment': 0,
+      'PayNow Transfers': 0,
       'Uncategorized': 0,
     };
 
@@ -258,6 +263,8 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         return <FileText className="w-3.5 h-3.5 text-orange-500" />;
       case 'Transfer / Payment':
         return <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-500" />;
+      case 'PayNow Transfers':
+        return <ArrowRightLeft className="w-3.5 h-3.5 text-cyan-500" />;
       default:
         return <DollarSign className="w-3.5 h-3.5 text-zinc-400" />;
     }

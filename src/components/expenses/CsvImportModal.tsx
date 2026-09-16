@@ -56,6 +56,7 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'Personal Care & Services',
   'Bills & Utilities',
   'Transfer / Payment',
+  'PayNow Transfers',
   'Uncategorized',
 ];
 

@@ -13,6 +13,7 @@ export const EXPENSE_CATEGORIES = [
   'Personal Care & Services',
   'Bills & Utilities',
   'Transfer / Payment',
+  'PayNow Transfers',
   'Uncategorized',
 ];
 
@@ -50,6 +51,7 @@ For each transaction:
 - cleanMerchant: The clean, concise merchant or vendor name (e.g. 'FairPrice', 'Grab', 'Amazon', 'Starbucks', 'DBS PayLah!').
 - amount: The numeric absolute value (positive float, e.g. 14.50).
 - type: One of 'expense' (purchases, debits), 'refund' (returns, credits), 'income' (salary, incoming deposits), or 'transfer' (inter-bank transfer, credit card payment).
+- For PayNow, use 'PayNow Transfers' and type 'transfer' for a likely person-to-person transfer. If the recipient is clearly a business, categorize the business normally.
 - category: Select the most accurate category from:
   ${EXPENSE_CATEGORIES.map((c) => `"${c}"`).join(', ')}.
 
@@ -191,6 +193,7 @@ const CATEGORY_BY_CODE = {
   personal: 'Personal Care & Services',
   bills: 'Bills & Utilities',
   transfer: 'Transfer / Payment',
+  paynow: 'PayNow Transfers',
   unknown: 'Uncategorized',
 };
 
@@ -255,7 +258,7 @@ export async function categorizeUnknownTransactions(rawItems = []) {
   const compactItems = uniqueList.map((item) => [item.id, item.representativeDescription]);
   const promptText = `Classify each bank transaction. Return exactly one result for every input ID.
 Fields: i=input ID; m=clean merchant; c=category code; p=uppercase reusable keyword/short regex; t=type code.
-Categories: income=Salary & Income, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, unknown=Uncategorized.
+Categories: income=Salary & Income, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, paynow=PayNow Transfers, unknown=Uncategorized.
 Types: e=expense, i=income, r=refund, t=transfer. Use unknown when uncertain. Do not include prose.
 Input: ${JSON.stringify(compactItems)}`;
 
