@@ -10,6 +10,7 @@ import {
   Sparkles, 
   TrendingDown, 
   TrendingUp, 
+  Layers,
   Sliders, 
   Download, 
   ShoppingBag,
@@ -113,7 +114,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      if (selectedAccountId !== 'all' && tx.accountId && tx.accountId !== selectedAccountId) return false;
+      if (selectedAccountId !== 'all' && tx.accountId !== selectedAccountId) return false;
       if (selectedCategory !== 'all' && tx.category !== selectedCategory) return false;
       if (selectedType !== 'all' && tx.type !== selectedType) return false;
       if (selectedMonth !== 'all' && (!tx.date || !tx.date.startsWith(selectedMonth))) return false;
@@ -570,6 +571,70 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
               Excluded from spend to prevent double-counting
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Category Budget Breakdown Bar Section */}
+      <div className="p-5 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+            Category Budget Breakdown
+          </h2>
+          <button
+            onClick={() => setIsBudgetModalOpen(true)}
+            className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium"
+          >
+            Adjust Targets
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {budgets.map((budget) => {
+            const spent = stats.categorySpend[budget.category] || 0;
+            const percentage = budget.monthlyLimit > 0 ? Math.round((spent / budget.monthlyLimit) * 100) : 0;
+            const isOverBudget = spent > budget.monthlyLimit;
+
+            return (
+              <div
+                key={budget.category}
+                onClick={() => setSelectedCategory(budget.category === selectedCategory ? 'all' : budget.category)}
+                className={`p-3 rounded-xl border transition cursor-pointer ${
+                  selectedCategory === budget.category
+                    ? 'border-brand-500 bg-brand-500/5 dark:bg-brand-500/10'
+                    : 'border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 bg-offwhite-subtle/50 dark:bg-zinc-900/50'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <div className="flex items-center gap-1.5 font-medium text-zinc-800 dark:text-zinc-200">
+                    {getCategoryIcon(budget.category)}
+                    <span>{budget.category}</span>
+                  </div>
+                  <span className={`font-mono font-semibold text-[11px] ${
+                    isOverBudget
+                      ? 'text-red-600 dark:text-red-400'
+                      : percentage >= 80
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-zinc-700 dark:text-zinc-300'
+                  }`}>
+                    ${spent.toFixed(0)} <span className="font-normal text-zinc-400">/ ${budget.monthlyLimit}</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isOverBudget
+                        ? 'bg-red-500'
+                        : percentage >= 80
+                          ? 'bg-amber-500'
+                          : 'bg-gradient-to-r from-brand-600 to-indigo-500'
+                    }`}
+                    style={{ width: `${Math.min(percentage, 100)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
