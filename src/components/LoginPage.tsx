@@ -5,7 +5,6 @@ import {
   UserPlus, 
   AlertCircle, 
   Loader2, 
-  ShieldCheck, 
   CheckCircle2, 
   Wallet, 
   Layers,
