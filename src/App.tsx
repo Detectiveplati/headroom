@@ -26,7 +26,8 @@ import {
   loadStoredCategoryRules,
   saveStoredCategoryRules,
   loadStoredCardMeta,
-  saveStoredCardMeta
+  saveStoredCardMeta,
+  DEFAULT_BUDGETS
 } from './utils/storage';
 import { soundManager } from './utils/audio';
 import { getMeApi, logoutApi } from './utils/auth';
@@ -57,14 +58,15 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('tasks');
 
   // Financial & Expense state
-  const [transactions, setTransactions] = useState<Transaction[]>(() => loadStoredTransactions());
-  const [budgets, setBudgets] = useState<CategoryBudget[]>(() => loadStoredBudgets());
-  const [categoryRules, setCategoryRules] = useState<Record<string, ExpenseCategory>>(() => loadStoredCategoryRules());
-  const [cardMeta, setCardMeta] = useState<CardMetaInfo>(() => loadStoredCardMeta());
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budgets, setBudgets] = useState<CategoryBudget[]>(DEFAULT_BUDGETS);
+  const [categoryRules, setCategoryRules] = useState<Record<string, ExpenseCategory>>({});
+  const [cardMeta, setCardMeta] = useState<CardMetaInfo>({});
 
   // Segregation & User state
   const [activeContext, setActiveContext] = useState<TaskContext | 'all'>('work');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [financeOwnerId, setFinanceOwnerId] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -113,39 +115,66 @@ export const App: React.FC = () => {
     soundManager.setEnabled(settings.soundEnabled);
   }, [settings]);
 
-  // Sync expenses & budgets to LocalStorage
+  // Load finance data only after the account is known. This prevents one user's
+  // locally imported statements from appearing for another user on the same device.
   useEffect(() => {
-    saveStoredTransactions(transactions);
-  }, [transactions]);
+    if (!currentUser) {
+      setTransactions([]);
+      setBudgets(DEFAULT_BUDGETS);
+      setCategoryRules({});
+      setCardMeta({});
+      setFinanceOwnerId(null);
+      return;
+    }
+
+    setTransactions(loadStoredTransactions(currentUser.id));
+    setBudgets(loadStoredBudgets(currentUser.id));
+    setCategoryRules(loadStoredCategoryRules(currentUser.id));
+    setCardMeta(loadStoredCardMeta(currentUser.id));
+    setFinanceOwnerId(currentUser.id);
+  }, [currentUser]);
+
+  // Sync finance data to this signed-in user's local storage only.
+  useEffect(() => {
+    if (currentUser && financeOwnerId === currentUser.id) {
+      saveStoredTransactions(currentUser.id, transactions);
+    }
+  }, [transactions, currentUser, financeOwnerId]);
 
   useEffect(() => {
-    saveStoredBudgets(budgets);
-  }, [budgets]);
+    if (currentUser && financeOwnerId === currentUser.id) {
+      saveStoredBudgets(currentUser.id, budgets);
+    }
+  }, [budgets, currentUser, financeOwnerId]);
 
   useEffect(() => {
-    saveStoredCardMeta(cardMeta);
-  }, [cardMeta]);
+    if (currentUser && financeOwnerId === currentUser.id) {
+      saveStoredCardMeta(currentUser.id, cardMeta);
+    }
+  }, [cardMeta, currentUser, financeOwnerId]);
 
   // Load server-persisted category rules and merge with local
   useEffect(() => {
+    if (!currentUser || financeOwnerId !== currentUser.id) return;
     fetch('/api/expenses/rules')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.success && data.rules && Object.keys(data.rules).length > 0) {
           setCategoryRules((prev) => {
             const merged = { ...prev, ...data.rules };
-            saveStoredCategoryRules(merged);
+            saveStoredCategoryRules(currentUser.id, merged);
             return merged;
           });
         }
       })
       .catch(() => {});
-  }, []);
+  }, [currentUser, financeOwnerId]);
 
   const handleSaveCategoryRule = useCallback((pattern: string, category: ExpenseCategory) => {
+    if (!currentUser) return;
     setCategoryRules((prev) => {
       const updated = { ...prev, [pattern]: category };
-      saveStoredCategoryRules(updated);
+      saveStoredCategoryRules(currentUser.id, updated);
       return updated;
     });
 
@@ -154,12 +183,13 @@ export const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pattern, category }),
     }).catch(() => {});
-  }, []);
+  }, [currentUser]);
 
   const handleSaveRulesBatch = useCallback((newRules: Record<string, ExpenseCategory>) => {
+    if (!currentUser) return;
     setCategoryRules((prev) => {
       const updated = { ...prev, ...newRules };
-      saveStoredCategoryRules(updated);
+      saveStoredCategoryRules(currentUser.id, updated);
       return updated;
     });
 
@@ -168,7 +198,7 @@ export const App: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rules: newRules }),
     }).catch(() => {});
-  }, []);
+  }, [currentUser]);
 
   // Theme Manager: Sync system / dark / light mode to document <html> element
   useEffect(() => {

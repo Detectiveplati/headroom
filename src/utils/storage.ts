@@ -19,6 +19,7 @@ const STORAGE_KEY_CARD_META = 'headroom_card_meta_v1';
 const STORAGE_KEY_ACCOUNTS = 'headroom_tracked_accounts_v1';
 const STORAGE_KEY_UPLOAD_LOGS = 'headroom_monthly_upload_logs_v1';
 const STORAGE_KEY_SCRUBBED = 'headroom_sample_scrubbed_v1';
+const STORAGE_KEY_FINANCE_MIGRATED = 'headroom_finance_storage_scoped_v1';
 
 export const DEFAULT_BUDGETS: CategoryBudget[] = [
   { category: 'Food & Dining', monthlyLimit: 700 },
@@ -221,23 +222,32 @@ export function importBoardData(jsonText: string): { tasks: Task[]; settings?: A
 // Expense & Budget Local-First Storage
 // -------------------------------------------------------------
 
-function ensureSampleDataPurged(): void {
+function getUserFinanceKey(baseKey: string, userId: string): string {
+  return `${baseKey}:${userId}`;
+}
+
+function purgeLegacyUnscopedFinanceData(): void {
   try {
-    if (localStorage.getItem(STORAGE_KEY_SCRUBBED) !== 'true') {
-      // Purge any previously cached sample transactions and card metadata
+    if (localStorage.getItem(STORAGE_KEY_FINANCE_MIGRATED) !== 'true') {
+      // These unscoped keys were shared by every signed-in user and may contain demo data.
       localStorage.removeItem(STORAGE_KEY_EXPENSES);
       localStorage.removeItem(STORAGE_KEY_CARD_META);
-      localStorage.setItem(STORAGE_KEY_SCRUBBED, 'true');
+      localStorage.removeItem(STORAGE_KEY_BUDGETS);
+      localStorage.removeItem(STORAGE_KEY_RULES);
+      localStorage.removeItem(STORAGE_KEY_ACCOUNTS);
+      localStorage.removeItem(STORAGE_KEY_UPLOAD_LOGS);
+      localStorage.removeItem(STORAGE_KEY_SCRUBBED);
+      localStorage.setItem(STORAGE_KEY_FINANCE_MIGRATED, 'true');
     }
   } catch {
     // Graceful fallback for privacy mode / restricted storage
   }
 }
 
-export function loadStoredTransactions(): Transaction[] {
+export function loadStoredTransactions(userId: string): Transaction[] {
   try {
-    ensureSampleDataPurged();
-    const raw = localStorage.getItem(STORAGE_KEY_EXPENSES);
+    purgeLegacyUnscopedFinanceData();
+    const raw = localStorage.getItem(getUserFinanceKey(STORAGE_KEY_EXPENSES, userId));
     if (!raw) {
       return [];
     }
@@ -252,26 +262,27 @@ export function loadStoredTransactions(): Transaction[] {
   }
 }
 
-export function saveStoredTransactions(transactions: Transaction[]): void {
+export function saveStoredTransactions(userId: string, transactions: Transaction[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(transactions));
+    localStorage.setItem(getUserFinanceKey(STORAGE_KEY_EXPENSES, userId), JSON.stringify(transactions));
   } catch (e) {
     console.error('Failed to save transactions to localStorage', e);
   }
 }
 
-export function clearAllExpenseData(): void {
+export function clearAllExpenseData(userId: string): void {
   try {
-    localStorage.removeItem(STORAGE_KEY_EXPENSES);
-    localStorage.removeItem(STORAGE_KEY_CARD_META);
+    localStorage.removeItem(getUserFinanceKey(STORAGE_KEY_EXPENSES, userId));
+    localStorage.removeItem(getUserFinanceKey(STORAGE_KEY_CARD_META, userId));
   } catch (e) {
     console.error('Failed to clear expense data', e);
   }
 }
 
-export function loadStoredBudgets(): CategoryBudget[] {
+export function loadStoredBudgets(userId: string): CategoryBudget[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_BUDGETS);
+    purgeLegacyUnscopedFinanceData();
+    const raw = localStorage.getItem(getUserFinanceKey(STORAGE_KEY_BUDGETS, userId));
     if (!raw) return DEFAULT_BUDGETS;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
@@ -283,17 +294,18 @@ export function loadStoredBudgets(): CategoryBudget[] {
   }
 }
 
-export function saveStoredBudgets(budgets: CategoryBudget[]): void {
+export function saveStoredBudgets(userId: string, budgets: CategoryBudget[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_BUDGETS, JSON.stringify(budgets));
+    localStorage.setItem(getUserFinanceKey(STORAGE_KEY_BUDGETS, userId), JSON.stringify(budgets));
   } catch (e) {
     console.error('Failed to save budgets to localStorage', e);
   }
 }
 
-export function loadStoredCategoryRules(): Record<string, ExpenseCategory> {
+export function loadStoredCategoryRules(userId: string): Record<string, ExpenseCategory> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_RULES);
+    purgeLegacyUnscopedFinanceData();
+    const raw = localStorage.getItem(getUserFinanceKey(STORAGE_KEY_RULES, userId));
     if (!raw) return {};
     return JSON.parse(raw) || {};
   } catch (e) {
@@ -301,18 +313,18 @@ export function loadStoredCategoryRules(): Record<string, ExpenseCategory> {
   }
 }
 
-export function saveStoredCategoryRules(rules: Record<string, ExpenseCategory>): void {
+export function saveStoredCategoryRules(userId: string, rules: Record<string, ExpenseCategory>): void {
   try {
-    localStorage.setItem(STORAGE_KEY_RULES, JSON.stringify(rules));
+    localStorage.setItem(getUserFinanceKey(STORAGE_KEY_RULES, userId), JSON.stringify(rules));
   } catch (e) {
     console.error('Failed to save category rules to localStorage', e);
   }
 }
 
-export function loadStoredCardMeta(): CardMetaInfo {
+export function loadStoredCardMeta(userId: string): CardMetaInfo {
   try {
-    ensureSampleDataPurged();
-    const raw = localStorage.getItem(STORAGE_KEY_CARD_META);
+    purgeLegacyUnscopedFinanceData();
+    const raw = localStorage.getItem(getUserFinanceKey(STORAGE_KEY_CARD_META, userId));
     if (!raw) {
       return {};
     }
@@ -322,9 +334,9 @@ export function loadStoredCardMeta(): CardMetaInfo {
   }
 }
 
-export function saveStoredCardMeta(meta: CardMetaInfo): void {
+export function saveStoredCardMeta(userId: string, meta: CardMetaInfo): void {
   try {
-    localStorage.setItem(STORAGE_KEY_CARD_META, JSON.stringify(meta));
+    localStorage.setItem(getUserFinanceKey(STORAGE_KEY_CARD_META, userId), JSON.stringify(meta));
   } catch (e) {
     console.error('Failed to save card metadata', e);
   }
@@ -409,4 +421,3 @@ export function saveStoredUploadLogs(logs: MonthlyAccountUpload[]): void {
     console.error('Failed to save upload logs to localStorage', e);
   }
 }
-
