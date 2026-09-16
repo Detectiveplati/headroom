@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   Calendar,
   Briefcase,
-  Home
+  Home,
+  Zap
 } from 'lucide-react';
 import { Task, ColumnId } from '../types';
 
@@ -74,13 +75,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     return `${hrs}h ${mins % 60}m`;
   };
 
+  const isDoingTask = task.columnId === 'doing';
+
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, task.id)}
       className={`group relative rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing border select-none ${
         isFocused
-          ? 'bg-offwhite-card dark:bg-zinc-900/95 border-brand-500/70 shadow-md shadow-brand-500/15 ring-1 ring-brand-500/40'
+          ? 'bg-offwhite-card dark:bg-zinc-900/95 border-brand-500/70 shadow-md shadow-brand-500/15 ring-1 ring-brand-500/40' + (isDoingTask ? ' border-l-4 border-l-amber-500' : '')
+          : isDoingTask
+          ? 'bg-[#fffefb] dark:bg-[#181520] border-amber-400/80 dark:border-amber-500/50 border-l-4 border-l-amber-500 hover:border-amber-500 dark:hover:border-amber-400 shadow-md shadow-amber-500/10 hover:shadow-lg hover:bg-white dark:hover:bg-[#1e1929]'
           : 'bg-offwhite-card dark:bg-[#151821]/80 hover:bg-offwhite-card dark:hover:bg-[#1a1e2a] border-zinc-300/70 dark:border-zinc-800/80 hover:border-zinc-400/90 dark:hover:border-zinc-700 shadow-xs hover:shadow-md'
       }`}
     >
@@ -94,6 +99,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <span className={`text-[10px] uppercase font-mono font-semibold px-2 py-0.5 rounded border ${getPriorityStyle(task.priority)}`}>
               {task.priority}
             </span>
+
+            {/* In Progress indicator */}
+            {isDoingTask && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                <Zap className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                In Progress
+              </span>
+            )}
 
             {/* Context Badge (Work vs Personal) */}
             {task.context === 'personal' ? (
@@ -255,11 +268,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onToggleTimer(task.id);
                 }}
-                className="flex items-center gap-1 font-mono text-[11px] text-brand-700 dark:text-brand-300 hover:text-brand-900 dark:hover:text-white bg-brand-500/15 hover:bg-brand-500/25 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
+                className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded border transition ${
+                  task.isRunning
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-900 dark:text-amber-200 border-amber-500/50 ring-1 ring-amber-500/30 shadow-xs'
+                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30'
+                }`}
                 title={task.isRunning ? "Pause timer" : "Start timer"}
               >
-                {task.isRunning ? <Pause className="w-2.5 h-2.5 text-amber-500" /> : <Play className="w-2.5 h-2.5 text-emerald-600 fill-emerald-600 dark:text-emerald-500 dark:fill-emerald-500" />}
-                <span>{formatElapsed(task.elapsedSeconds)}</span>
+                {task.isRunning ? (
+                  <Pause className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400 animate-pulse" />
+                ) : (
+                  <Play className="w-2.5 h-2.5 text-emerald-600 fill-emerald-600 dark:text-emerald-500 dark:fill-emerald-500" />
+                )}
+                <span className="font-semibold">{formatElapsed(task.elapsedSeconds)}</span>
               </button>
             )}
 
