@@ -1,13 +1,32 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { Task, ColumnId, AppSettings, TaskContext, User } from './types';
+import { 
+  Task, 
+  ColumnId, 
+  AppSettings, 
+  TaskContext, 
+  User, 
+  ActiveTab, 
+  Transaction, 
+  CategoryBudget, 
+  ExpenseCategory, 
+  CardMetaInfo 
+} from './types';
 import { 
   loadStoredTasks, 
   saveStoredTasks, 
   loadStoredSettings, 
   saveStoredSettings,
   loadStoredActiveTaskId,
-  saveStoredActiveTaskId
+  saveStoredActiveTaskId,
+  loadStoredTransactions,
+  saveStoredTransactions,
+  loadStoredBudgets,
+  saveStoredBudgets,
+  loadStoredCategoryRules,
+  saveStoredCategoryRules,
+  loadStoredCardMeta,
+  saveStoredCardMeta
 } from './utils/storage';
 import { soundManager } from './utils/audio';
 import { getMeApi, logoutApi } from './utils/auth';
@@ -19,8 +38,11 @@ import {
   pullBoardFromCloud, 
   pushBoardToCloud 
 } from './utils/sync';
+import { Sparkles } from 'lucide-react';
 import { FocusHUD } from './components/FocusHUD';
 import { KanbanBoard } from './components/KanbanBoard';
+import { ExpenseDashboard } from './components/expenses/ExpenseDashboard';
+import { LoginPage } from './components/LoginPage';
 import { TaskModal } from './components/TaskModal';
 import { WipLimitModal } from './components/WipLimitModal';
 import { BackupModal } from './components/BackupModal';
@@ -33,9 +55,19 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
   const [activeTaskId, setActiveTaskId] = useState<string | null>(() => loadStoredActiveTaskId());
 
+  // Active App Mode (Tasks / Kanban vs Financial Headroom)
+  const [activeTab, setActiveTab] = useState<ActiveTab>('tasks');
+
+  // Financial & Expense state
+  const [transactions, setTransactions] = useState<Transaction[]>(() => loadStoredTransactions());
+  const [budgets, setBudgets] = useState<CategoryBudget[]>(() => loadStoredBudgets());
+  const [categoryRules, setCategoryRules] = useState<Record<string, ExpenseCategory>>(() => loadStoredCategoryRules());
+  const [cardMeta, setCardMeta] = useState<CardMetaInfo>(() => loadStoredCardMeta());
+
   // Segregation & User state
   const [activeContext, setActiveContext] = useState<TaskContext | 'all'>('work');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Cloud Sync state
@@ -58,11 +90,20 @@ export const App: React.FC = () => {
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastLocalEditTimeRef = useRef<number>(Date.now());
 
-  // Check authenticated user on mount
+  // Check authenticated user on mount with loading gate
   useEffect(() => {
-    getMeApi().then((user) => {
-      if (user) setCurrentUser(user);
-    });
+    getMeApi()
+      .then((user) => {
+        if (user) {
+          setCurrentUser(user);
+          const userBoardKey = `user_${user.id}_default`;
+          setBoardKey(userBoardKey);
+          saveStoredBoardKey(userBoardKey);
+        }
+      })
+      .finally(() => {
+        setIsAuthChecking(false);
+      });
   }, []);
 
   // Sync tasks to LocalStorage
@@ -75,6 +116,27 @@ export const App: React.FC = () => {
     saveStoredSettings(settings);
     soundManager.setEnabled(settings.soundEnabled);
   }, [settings]);
+
+  // Sync expenses & budgets to LocalStorage
+  useEffect(() => {
+    saveStoredTransactions(transactions);
+  }, [transactions]);
+
+  useEffect(() => {
+    saveStoredBudgets(budgets);
+  }, [budgets]);
+
+  useEffect(() => {
+    saveStoredCardMeta(cardMeta);
+  }, [cardMeta]);
+
+  const handleSaveCategoryRule = useCallback((pattern: string, category: ExpenseCategory) => {
+    setCategoryRules((prev) => {
+      const updated = { ...prev, [pattern]: category };
+      saveStoredCategoryRules(updated);
+      return updated;
+    });
+  }, []);
 
   // Theme Manager: Sync system / dark / light mode to document <html> element
   useEffect(() => {
@@ -91,21 +153,6 @@ export const App: React.FC = () => {
     media.addEventListener('change', applyTheme);
     return () => media.removeEventListener('change', applyTheme);
   }, [settings.theme]);
-
-  // Check active user session on startup
-  useEffect(() => {
-    getMeApi().then((user) => {
-      if (user) {
-        setCurrentUser(user);
-        const userBoardKey = `user_${user.id}_default`;
-        const currentKey = getStoredBoardKey();
-        if (!currentKey || currentKey === 'default') {
-          setBoardKey(userBoardKey);
-          saveStoredBoardKey(userBoardKey);
-        }
-      }
-    });
-  }, []);
 
   // Sync active task ID
   useEffect(() => {
@@ -161,7 +208,9 @@ export const App: React.FC = () => {
         if (remoteTime > lastLocalEditTimeRef.current || isManual) {
           isSyncingFromRemoteRef.current = true;
           if (Array.isArray(result.data.tasks)) {
-            setTasks(result.data.tasks);
+            if (result.data.tasks.length > 0 || tasks.length === 0 || isManual) {
+              setTasks(result.data.tasks);
+            }
           }
           if (result.data.settings) {
             setSettings(result.data.settings);
@@ -463,7 +512,13 @@ export const App: React.FC = () => {
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if (e.altKey && e.key === '1') {
+        e.preventDefault();
+        setActiveTab('tasks');
+      } else if (e.altKey && e.key === '2') {
+        e.preventDefault();
+        setActiveTab('expenses');
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setEditingTask(null);
         setDefaultColumnForNew('backlog');
@@ -490,10 +545,32 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Loading Gate while checking active session
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-offwhite-bg dark:bg-[#090a0f] flex flex-col items-center justify-center text-zinc-600 dark:text-zinc-400 gap-3">
+        <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/25 animate-pulse">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-mono">
+          <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
+          <span>Starting Headroom...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Authentication Gate: Require user to sign in or register before accessing the workspace
+  if (!currentUser) {
+    return <LoginPage onSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-offwhite-bg dark:bg-[#090a0f] text-zinc-800 dark:text-zinc-100 flex flex-col selection:bg-brand-500/30 selection:text-brand-700 dark:selection:text-brand-200 transition-colors duration-200">
       {/* Persistent Focus HUD */}
       <FocusHUD
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
         activeTask={activeTask}
         doingTasks={doingTasks}
         syncStatus={syncStatus}
@@ -522,25 +599,38 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      {/* Main Kanban Board Area */}
+      {/* Main Content Area (Kanban vs Financial Headroom) */}
       <main className="flex-1 flex flex-col">
-        <KanbanBoard
-          tasks={tasks}
-          activeTaskId={activeTask?.id || null}
-          settings={settings}
-          activeContext={activeContext}
-          onEditTask={(task) => {
-            setEditingTask(task);
-            setIsTaskModalOpen(true);
-          }}
-          onDeleteTask={handleDeleteTask}
-          onMoveTask={handleMoveTask}
-          onToggleSubtask={handleToggleSubtask}
-          onQuickAddTask={handleQuickAddTask}
-          onToggleTimer={handleToggleTimer}
-          onFocusTask={(taskId) => setActiveTaskId(taskId)}
-          onWipViolation={handleWipViolation}
-        />
+        {activeTab === 'tasks' ? (
+          <KanbanBoard
+            tasks={tasks}
+            activeTaskId={activeTask?.id || null}
+            settings={settings}
+            activeContext={activeContext}
+            onEditTask={(task) => {
+              setEditingTask(task);
+              setIsTaskModalOpen(true);
+            }}
+            onDeleteTask={handleDeleteTask}
+            onMoveTask={handleMoveTask}
+            onToggleSubtask={handleToggleSubtask}
+            onQuickAddTask={handleQuickAddTask}
+            onToggleTimer={handleToggleTimer}
+            onFocusTask={(taskId) => setActiveTaskId(taskId)}
+            onWipViolation={handleWipViolation}
+          />
+        ) : (
+          <ExpenseDashboard
+            transactions={transactions}
+            onUpdateTransactions={setTransactions}
+            budgets={budgets}
+            onUpdateBudgets={setBudgets}
+            categoryRules={categoryRules}
+            onSaveRule={handleSaveCategoryRule}
+            cardMeta={cardMeta}
+            onUpdateCardMeta={setCardMeta}
+          />
+        )}
       </main>
 
       {/* Task Create / Edit Modal */}

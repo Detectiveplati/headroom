@@ -8,8 +8,10 @@ import {
   registerUser, 
   loginUser, 
   getUserByToken, 
-  deleteSession 
+  deleteSession,
+  isPostgresConnected
 } from './server/db.js';
+import { parseStatementWithGemini } from './server/gemini.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,7 +54,7 @@ function parseBody(req) {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk.toString();
-      if (body.length > 5 * 1024 * 1024) {
+      if (body.length > 15 * 1024 * 1024) {
         reject(new Error('Payload too large'));
       }
     });
@@ -95,7 +97,13 @@ const server = http.createServer(async (req, res) => {
     try {
       // 1. Health check
       if (pathname === '/api/health' && req.method === 'GET') {
-        sendJson(res, 200, { status: 'ok', serverTime: Date.now() });
+        const isPg = isPostgresConnected();
+        sendJson(res, 200, { 
+          status: 'ok', 
+          serverTime: Date.now(),
+          database: isPg ? 'postgres' : 'ephemeral-file',
+          persistent: isPg
+        });
         return;
       }
 
@@ -197,6 +205,19 @@ const server = http.createServer(async (req, res) => {
         });
 
         sendJson(res, 200, { success: true, boardKey, data: saved });
+        return;
+      }
+
+      // 8. POST /api/expenses/parse-statement (Gemini AI PDF/Document Statement Extraction)
+      if (pathname === '/api/expenses/parse-statement' && req.method === 'POST') {
+        const payload = await parseBody(req);
+        const { fileBase64, mimeType, fileName } = payload;
+        try {
+          const result = await parseStatementWithGemini({ fileBase64, mimeType, fileName });
+          sendJson(res, 200, { success: true, ...result });
+        } catch (aiErr) {
+          sendJson(res, 400, { success: false, error: aiErr.message });
+        }
         return;
       }
 

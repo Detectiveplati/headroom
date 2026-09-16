@@ -1,8 +1,23 @@
-import { Task, AppSettings } from '../types';
+import { Task, AppSettings, Transaction, CategoryBudget, ExpenseCategory, CardMetaInfo } from '../types';
+import { getStarterExpenseData } from './starterExpenses';
 
 const STORAGE_KEY_TASKS = 'headroom_tasks_v1';
 const STORAGE_KEY_SETTINGS = 'headroom_settings_v1';
 const STORAGE_KEY_ACTIVE = 'headroom_active_task_v1';
+const STORAGE_KEY_EXPENSES = 'headroom_expenses_v1';
+const STORAGE_KEY_BUDGETS = 'headroom_budgets_v1';
+const STORAGE_KEY_RULES = 'headroom_category_rules_v1';
+const STORAGE_KEY_CARD_META = 'headroom_card_meta_v1';
+
+export const DEFAULT_BUDGETS: CategoryBudget[] = [
+  { category: 'Food & Dining', monthlyLimit: 700 },
+  { category: 'Groceries', monthlyLimit: 300 },
+  { category: 'Transport & Petrol', monthlyLimit: 350 },
+  { category: 'Shopping & E-Commerce', monthlyLimit: 500 },
+  { category: 'Entertainment & Gaming', monthlyLimit: 150 },
+  { category: 'Personal Care & Services', monthlyLimit: 150 },
+  { category: 'Bills & Utilities', monthlyLimit: 200 },
+];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   wipLimit: 2,
@@ -189,4 +204,99 @@ export function importBoardData(jsonText: string): { tasks: Task[]; settings?: A
     return { tasks: parsed.tasks, settings: parsed.settings };
   }
   throw new Error('Invalid Headroom backup format. Expected array or object with tasks.');
+}
+
+// -------------------------------------------------------------
+// Expense & Budget Local-First Storage
+// -------------------------------------------------------------
+
+export function loadStoredTransactions(): Transaction[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_EXPENSES);
+    if (!raw) {
+      const starter = getStarterExpenseData();
+      saveStoredTransactions(starter.transactions);
+      if (starter.meta) {
+        saveStoredCardMeta(starter.meta);
+      }
+      return starter.transactions;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return [];
+  } catch (e) {
+    console.error('Failed to load transactions from localStorage', e);
+    return [];
+  }
+}
+
+export function saveStoredTransactions(transactions: Transaction[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(transactions));
+  } catch (e) {
+    console.error('Failed to save transactions to localStorage', e);
+  }
+}
+
+export function loadStoredBudgets(): CategoryBudget[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BUDGETS);
+    if (!raw) return DEFAULT_BUDGETS;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return DEFAULT_BUDGETS;
+  } catch (e) {
+    return DEFAULT_BUDGETS;
+  }
+}
+
+export function saveStoredBudgets(budgets: CategoryBudget[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_BUDGETS, JSON.stringify(budgets));
+  } catch (e) {
+    console.error('Failed to save budgets to localStorage', e);
+  }
+}
+
+export function loadStoredCategoryRules(): Record<string, ExpenseCategory> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_RULES);
+    if (!raw) return {};
+    return JSON.parse(raw) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+export function saveStoredCategoryRules(rules: Record<string, ExpenseCategory>): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_RULES, JSON.stringify(rules));
+  } catch (e) {
+    console.error('Failed to save category rules to localStorage', e);
+  }
+}
+
+export function loadStoredCardMeta(): CardMetaInfo {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CARD_META);
+    if (!raw) {
+      const starter = getStarterExpenseData();
+      return starter.meta;
+    }
+    return JSON.parse(raw) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+export function saveStoredCardMeta(meta: CardMetaInfo): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_CARD_META, JSON.stringify(meta));
+  } catch (e) {
+    console.error('Failed to save card metadata', e);
+  }
 }

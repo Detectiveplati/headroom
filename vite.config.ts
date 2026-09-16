@@ -1,4 +1,4 @@
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { 
   getBoard, 
@@ -6,8 +6,10 @@ import {
   registerUser, 
   loginUser, 
   getUserByToken, 
-  deleteSession 
+  deleteSession,
+  isPostgresConnected
 } from './server/db.js';
+import { parseStatementWithGemini } from './server/gemini.js';
 
 function syncApiPlugin(): Plugin {
   return {
@@ -42,8 +44,14 @@ function syncApiPlugin(): Plugin {
         };
 
         if (pathname === '/api/health' && req.method === 'GET') {
+          const isPg = isPostgresConnected();
           res.statusCode = 200;
-          res.end(JSON.stringify({ status: 'ok', serverTime: Date.now() }));
+          res.end(JSON.stringify({ 
+            status: 'ok', 
+            serverTime: Date.now(),
+            database: isPg ? 'postgres' : 'ephemeral-file',
+            persistent: isPg
+          }));
           return;
         }
 
@@ -141,6 +149,22 @@ function syncApiPlugin(): Plugin {
           return;
         }
 
+        // Gemini statement parsing endpoint
+        if (pathname === '/api/expenses/parse-statement' && req.method === 'POST') {
+          const payload = await readBody();
+          const { fileBase64, mimeType, fileName } = payload;
+          try {
+            const result = await parseStatementWithGemini({ fileBase64, mimeType, fileName });
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, ...result }));
+          } catch (aiErr: unknown) {
+            const errMessage = aiErr instanceof Error ? aiErr.message : 'Unknown AI parsing error';
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: errMessage }));
+          }
+          return;
+        }
+
         next();
       });
     },
@@ -148,14 +172,21 @@ function syncApiPlugin(): Plugin {
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react(), syncApiPlugin()],
-  server: {
-    port: 3000,
-    host: true,
-  },
-  preview: {
-    port: 3000,
-    host: true,
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  if (env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY) {
+    process.env.GEMINI_API_KEY = env.GEMINI_API_KEY;
+  }
+
+  return {
+    plugins: [react(), syncApiPlugin()],
+    server: {
+      port: 3000,
+      host: true,
+    },
+    preview: {
+      port: 3000,
+      host: true,
+    },
+  };
 });

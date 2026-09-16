@@ -1,0 +1,898 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  CreditCard, 
+  UploadCloud, 
+  Plus, 
+  Search, 
+  Calendar, 
+  Trash2, 
+  Check, 
+  Sparkles, 
+  TrendingDown, 
+  TrendingUp, 
+  Layers, 
+  Sliders, 
+  Download, 
+  RefreshCw,
+  ShoppingBag,
+  Utensils,
+  Car,
+  Tv,
+  Smile,
+  FileText,
+  DollarSign,
+  ArrowRightLeft
+} from 'lucide-react';
+import { 
+  Transaction, 
+  TransactionType, 
+  ExpenseCategory, 
+  CategoryBudget, 
+  CardMetaInfo 
+} from '../../types';
+import { CsvImportModal } from './CsvImportModal';
+import { getStarterExpenseData } from '../../utils/starterExpenses';
+
+interface ExpenseDashboardProps {
+  transactions: Transaction[];
+  onUpdateTransactions: (updater: Transaction[] | ((prev: Transaction[]) => Transaction[])) => void;
+  budgets: CategoryBudget[];
+  onUpdateBudgets: (newBudgets: CategoryBudget[]) => void;
+  categoryRules: Record<string, ExpenseCategory>;
+  onSaveRule: (pattern: string, category: ExpenseCategory) => void;
+  cardMeta: CardMetaInfo;
+  onUpdateCardMeta: (meta: CardMetaInfo) => void;
+}
+
+const ALL_CATEGORIES: ExpenseCategory[] = [
+  'Food & Dining',
+  'Groceries',
+  'Transport & Petrol',
+  'Shopping & E-Commerce',
+  'Entertainment & Gaming',
+  'Personal Care & Services',
+  'Bills & Utilities',
+  'Transfer / Payment',
+  'Uncategorized',
+];
+
+export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
+  transactions,
+  onUpdateTransactions,
+  budgets,
+  onUpdateBudgets,
+  categoryRules,
+  onSaveRule,
+  cardMeta,
+  onUpdateCardMeta,
+}) => {
+  // Filter & Search states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'all'>('all');
+  const [selectedType, setSelectedType] = useState<TransactionType | 'all'>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+
+  // Modals state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isAddTxModalOpen, setIsAddTxModalOpen] = useState(false);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+
+  // New Transaction Form State
+  const [newTxDate, setNewTxDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newTxMerchant, setNewTxMerchant] = useState('');
+  const [newTxAmount, setNewTxAmount] = useState('');
+  const [newTxCategory, setNewTxCategory] = useState<ExpenseCategory>('Food & Dining');
+  const [newTxType, setNewTxType] = useState<TransactionType>('expense');
+
+  // Discover distinct months in the dataset
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    transactions.forEach((tx) => {
+      if (tx.date && tx.date.length >= 7) {
+        months.add(tx.date.substring(0, 7)); // YYYY-MM
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [transactions]);
+
+  // Filtered transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (selectedCategory !== 'all' && tx.category !== selectedCategory) return false;
+      if (selectedType !== 'all' && tx.type !== selectedType) return false;
+      if (selectedMonth !== 'all' && (!tx.date || !tx.date.startsWith(selectedMonth))) return false;
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesMerchant = tx.cleanMerchant.toLowerCase().includes(query);
+        const matchesRaw = tx.rawDescription.toLowerCase().includes(query);
+        const matchesCat = tx.category.toLowerCase().includes(query);
+        if (!matchesMerchant && !matchesRaw && !matchesCat) return false;
+      }
+
+      return true;
+    });
+  }, [transactions, selectedCategory, selectedType, selectedMonth, searchQuery]);
+
+  // Aggregate stats (calculated on active month or overall)
+  const stats = useMemo(() => {
+    const scope = selectedMonth === 'all' 
+      ? transactions 
+      : transactions.filter((t) => t.date && t.date.startsWith(selectedMonth));
+
+    const totalSpend = scope
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalRefunds = scope
+      .filter((t) => t.type === 'refund')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const netSpend = Math.max(0, totalSpend - totalRefunds);
+
+    const totalTransfers = scope
+      .filter((t) => t.type === 'transfer')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Spend by category
+    const categorySpend: Record<ExpenseCategory, number> = {
+      'Food & Dining': 0,
+      'Groceries': 0,
+      'Transport & Petrol': 0,
+      'Shopping & E-Commerce': 0,
+      'Entertainment & Gaming': 0,
+      'Personal Care & Services': 0,
+      'Bills & Utilities': 0,
+      'Transfer / Payment': 0,
+      'Uncategorized': 0,
+    };
+
+    scope.forEach((t) => {
+      if (t.type === 'expense') {
+        categorySpend[t.category] = (categorySpend[t.category] || 0) + t.amount;
+      } else if (t.type === 'refund') {
+        categorySpend[t.category] = Math.max(0, (categorySpend[t.category] || 0) - t.amount);
+      }
+    });
+
+    // Unreviewed items
+    const unreviewedCount = scope.filter((t) => !t.reviewed).length;
+
+    // Daily pace / burn rate calculation
+    const daysInMonth = 30;
+    const currentDay = Math.min(new Date().getDate(), daysInMonth);
+    const dailyPace = netSpend > 0 ? netSpend / Math.max(currentDay, 1) : 0;
+    const projectedSpend = dailyPace * daysInMonth;
+
+    return {
+      totalSpend,
+      totalRefunds,
+      netSpend,
+      totalTransfers,
+      categorySpend,
+      unreviewedCount,
+      dailyPace,
+      projectedSpend,
+    };
+  }, [transactions, selectedMonth]);
+
+  // Category Icon Mapper
+  const getCategoryIcon = (category: ExpenseCategory) => {
+    switch (category) {
+      case 'Food & Dining':
+        return <Utensils className="w-3.5 h-3.5 text-amber-500" />;
+      case 'Groceries':
+        return <ShoppingBag className="w-3.5 h-3.5 text-emerald-500" />;
+      case 'Transport & Petrol':
+        return <Car className="w-3.5 h-3.5 text-blue-500" />;
+      case 'Shopping & E-Commerce':
+        return <Smile className="w-3.5 h-3.5 text-purple-500" />;
+      case 'Entertainment & Gaming':
+        return <Tv className="w-3.5 h-3.5 text-pink-500" />;
+      case 'Personal Care & Services':
+        return <Sparkles className="w-3.5 h-3.5 text-teal-500" />;
+      case 'Bills & Utilities':
+        return <FileText className="w-3.5 h-3.5 text-orange-500" />;
+      case 'Transfer / Payment':
+        return <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-500" />;
+      default:
+        return <DollarSign className="w-3.5 h-3.5 text-zinc-400" />;
+    }
+  };
+
+  // Handlers
+  const handleImportBatch = (newTxs: Transaction[], meta: CardMetaInfo) => {
+    onUpdateTransactions((prev) => [...newTxs, ...prev]);
+    if (meta.accountName || meta.creditLimit) {
+      onUpdateCardMeta({ ...cardMeta, ...meta });
+    }
+  };
+
+  const handleInlineCategoryChange = (txId: string, merchant: string, newCat: ExpenseCategory) => {
+    onUpdateTransactions((prev) =>
+      prev.map((t) => (t.id === txId ? { ...t, category: newCat, reviewed: true } : t))
+    );
+
+    // Prompt user to remember rule
+    const shouldRemember = window.confirm(
+      `Remember "${newCat}" for all future transactions from "${merchant}"?`
+    );
+    if (shouldRemember) {
+      onSaveRule(merchant, newCat);
+    }
+  };
+
+  const handleDeleteTx = (id: string) => {
+    if (window.confirm('Delete this transaction?')) {
+      onUpdateTransactions((prev) => prev.filter((t) => t.id !== id));
+    }
+  };
+
+  const handleToggleReviewed = (id: string) => {
+    onUpdateTransactions((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, reviewed: !t.reviewed } : t))
+    );
+  };
+
+  const handleMarkAllReviewed = () => {
+    onUpdateTransactions((prev) => prev.map((t) => ({ ...t, reviewed: true })));
+  };
+
+  const handleResetToStarter = () => {
+    if (window.confirm('Reload the original DBS statement transactions? Current entries will be replaced.')) {
+      const starter = getStarterExpenseData();
+      onUpdateTransactions(starter.transactions);
+      if (starter.meta) onUpdateCardMeta(starter.meta);
+    }
+  };
+
+  const handleAddManualTx = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = parseFloat(newTxAmount);
+    if (!newTxMerchant.trim() || isNaN(amountNum) || amountNum <= 0) return;
+
+    const newTx: Transaction = {
+      id: `tx_${Date.now()}_manual`,
+      date: newTxDate,
+      rawDescription: newTxMerchant.trim(),
+      cleanMerchant: newTxMerchant.trim(),
+      amount: amountNum,
+      type: newTxType,
+      category: newTxCategory,
+      reviewed: true,
+      createdAt: Date.now(),
+    };
+
+    onUpdateTransactions((prev) => [newTx, ...prev]);
+    setIsAddTxModalOpen(false);
+    setNewTxMerchant('');
+    setNewTxAmount('');
+  };
+
+  const handleExportCsv = () => {
+    const headers = ['Date', 'Merchant', 'Raw Description', 'Amount', 'Type', 'Category', 'Payment Type'];
+    const rows = transactions.map((t) => [
+      `"${t.date}"`,
+      `"${t.cleanMerchant.replace(/"/g, '""')}"`,
+      `"${t.rawDescription.replace(/"/g, '""')}"`,
+      t.amount.toFixed(2),
+      `"${t.type}"`,
+      `"${t.category}"`,
+      `"${t.paymentType || ''}"`,
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `headroom-expenses-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      {/* Cockpit Financial Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+              Financial Headroom
+            </h1>
+            {cardMeta.accountName && (
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                {cardMeta.accountName.replace(/MasterCard Platinum/i, 'MasterCard')}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Cognitive expense tracking, pace forecasting, and automatic bank statement normalization.
+          </p>
+        </div>
+
+        {/* Header Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Month Selector */}
+          <div className="flex items-center gap-1 bg-offwhite-surface dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-800 rounded-xl px-2.5 py-1 text-xs font-medium">
+            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-transparent text-zinc-800 dark:text-zinc-200 focus:outline-none text-xs cursor-pointer"
+            >
+              <option value="all">All Months</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Import Statement */}
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-md shadow-brand-600/20 transition active:scale-95"
+            title="Import Bank Statement (PDF or CSV)"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Import Statement</span>
+            <span className="hidden sm:inline-block text-[10px] px-1 py-0.5 bg-white/20 rounded font-normal">
+              PDF/CSV
+            </span>
+          </button>
+
+          {/* Manual Add */}
+          <button
+            onClick={() => setIsAddTxModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-medium transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Entry</span>
+          </button>
+
+          {/* Budget Limits Modal */}
+          <button
+            onClick={() => setIsBudgetModalOpen(true)}
+            className="p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
+            title="Adjust Monthly Budget Targets"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Export CSV */}
+          <button
+            onClick={handleExportCsv}
+            className="p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
+            title="Export Cleaned Expenses as CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Reload Starter DBS Statement */}
+          <button
+            onClick={handleResetToStarter}
+            className="p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
+            title="Reload DBS statement sample data"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Cockpit Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Net Monthly Spend */}
+        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Net Spend (Excl. Payments)</span>
+            <TrendingDown className="w-4 h-4 text-red-500" />
+          </div>
+          <div className="mt-2">
+            <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
+              SGD ${stats.netSpend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-500">
+              <span>Gross: ${stats.totalSpend.toFixed(0)}</span>
+              <span>•</span>
+              <span className="text-emerald-600 dark:text-emerald-400">Refunds: -${stats.totalRefunds.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Burn Rate & Pace */}
+        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Daily Burn Rate & Forecast</span>
+            <TrendingUp className="w-4 h-4 text-amber-500" />
+          </div>
+          <div className="mt-2">
+            <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
+              ~${stats.dailyPace.toFixed(2)} <span className="text-xs font-normal text-zinc-400">/ day</span>
+            </div>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              Projected month total: <strong className="text-zinc-800 dark:text-zinc-200 font-mono">${stats.projectedSpend.toFixed(0)}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Credit Limit & Available Headroom */}
+        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Available Card Headroom</span>
+            <CreditCard className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div className="mt-2">
+            {cardMeta.availableLimit !== undefined ? (
+              <>
+                <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  SGD ${cardMeta.availableLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                <div className="mt-1 text-[11px] text-zinc-500">
+                  Limit: SGD ${cardMeta.creditLimit?.toLocaleString() || '10,200'}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-zinc-400 py-2">Import a statement to view limit</div>
+            )}
+          </div>
+        </div>
+
+        {/* Transfers & Bill Payments (Preserved separately) */}
+        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Card Payments / Transfers</span>
+            <ArrowRightLeft className="w-4 h-4 text-blue-500" />
+          </div>
+          <div className="mt-2">
+            <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
+              ${stats.totalTransfers.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              Excluded from spend to prevent double-counting
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Budget Breakdown Bar Section */}
+      <div className="p-5 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+            Category Budget Breakdown
+          </h2>
+          <button
+            onClick={() => setIsBudgetModalOpen(true)}
+            className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium"
+          >
+            Adjust Targets
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {budgets.map((b) => {
+            const spent = stats.categorySpend[b.category] || 0;
+            const pct = b.monthlyLimit > 0 ? Math.round((spent / b.monthlyLimit) * 100) : 0;
+            const isOver = spent > b.monthlyLimit;
+
+            return (
+              <div
+                key={b.category}
+                onClick={() => setSelectedCategory(b.category === selectedCategory ? 'all' : b.category)}
+                className={`p-3 rounded-xl border transition cursor-pointer ${
+                  selectedCategory === b.category
+                    ? 'border-brand-500 bg-brand-500/5 dark:bg-brand-500/10'
+                    : 'border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 bg-offwhite-subtle/50 dark:bg-zinc-900/50'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <div className="flex items-center gap-1.5 font-medium text-zinc-800 dark:text-zinc-200">
+                    {getCategoryIcon(b.category)}
+                    <span>{b.category}</span>
+                  </div>
+                  <span
+                    className={`font-mono font-semibold text-[11px] ${
+                      isOver
+                        ? 'text-red-600 dark:text-red-400'
+                        : pct >= 80
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    ${spent.toFixed(0)} <span className="font-normal text-zinc-400">/ ${b.monthlyLimit}</span>
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isOver
+                        ? 'bg-red-500'
+                        : pct >= 80
+                        ? 'bg-amber-500'
+                        : 'bg-gradient-to-r from-brand-600 to-indigo-500'
+                    }`}
+                    style={{ width: `${Math.min(pct, 100)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filter and Ledger Header Toolbar */}
+      <div className="space-y-3">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-3">
+          {/* Search bar */}
+          <div className="relative w-full md:w-80">
+            <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search merchant, notes, or category..."
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-zinc-300/80 dark:border-zinc-800 bg-offwhite-surface dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+
+          {/* Type Filter Pills */}
+          <div className="flex items-center gap-1 bg-offwhite-subtle dark:bg-zinc-900 p-1 rounded-xl border border-zinc-300/80 dark:border-zinc-800 text-xs self-start md:self-auto">
+            <button
+              onClick={() => setSelectedType('all')}
+              className={`px-2.5 py-1 rounded-lg transition font-medium ${
+                selectedType === 'all'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              All Types
+            </button>
+            <button
+              onClick={() => setSelectedType('expense')}
+              className={`px-2.5 py-1 rounded-lg transition font-medium ${
+                selectedType === 'expense'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              Debits
+            </button>
+            <button
+              onClick={() => setSelectedType('refund')}
+              className={`px-2.5 py-1 rounded-lg transition font-medium ${
+                selectedType === 'refund'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              Refunds
+            </button>
+            <button
+              onClick={() => setSelectedType('transfer')}
+              className={`px-2.5 py-1 rounded-lg transition font-medium ${
+                selectedType === 'transfer'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              Payments
+            </button>
+          </div>
+
+          {/* Review Queue Count */}
+          {stats.unreviewedCount > 0 && (
+            <button
+              onClick={handleMarkAllReviewed}
+              className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium"
+            >
+              Mark {stats.unreviewedCount} items reviewed
+            </button>
+          )}
+        </div>
+
+        {/* Category Horizontal Filter Tags */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
+              selectedCategory === 'all'
+                ? 'bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900 border-transparent'
+                : 'bg-offwhite-surface dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-300/70 dark:border-zinc-800 hover:border-zinc-400'
+            }`}
+          >
+            All Categories
+          </button>
+          {ALL_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
+                selectedCategory === cat
+                  ? 'bg-brand-600 text-white border-transparent'
+                  : 'bg-offwhite-surface dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-300/70 dark:border-zinc-800 hover:border-zinc-400'
+              }`}
+            >
+              {getCategoryIcon(cat)}
+              <span>{cat}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Transaction Ledger Table */}
+      <div className="border border-zinc-300/80 dark:border-zinc-800 rounded-2xl overflow-hidden bg-offwhite-surface dark:bg-zinc-900/60 shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-offwhite-subtle dark:bg-zinc-900 text-zinc-500 border-b border-zinc-300/70 dark:border-zinc-800">
+              <tr>
+                <th className="py-3 px-4 w-10">Status</th>
+                <th className="py-3 px-4">Date</th>
+                <th className="py-3 px-4">Clean Merchant</th>
+                <th className="py-3 px-4">Category</th>
+                <th className="py-3 px-4">Payment Method</th>
+                <th className="py-3 px-4 text-right">Amount</th>
+                <th className="py-3 px-4 w-12 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-zinc-400">
+                    No transactions match your current filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredTransactions.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className="hover:bg-zinc-100/60 dark:hover:bg-zinc-800/30 transition group"
+                  >
+                    {/* Reviewed check */}
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={() => handleToggleReviewed(tx.id)}
+                        className={`w-5 h-5 rounded flex items-center justify-center transition ${
+                          tx.reviewed
+                            ? 'text-emerald-500 bg-emerald-500/10'
+                            : 'text-zinc-300 dark:text-zinc-700 hover:text-zinc-500 border border-zinc-300 dark:border-zinc-700'
+                        }`}
+                        title={tx.reviewed ? 'Reviewed' : 'Click to mark reviewed'}
+                      >
+                        {tx.reviewed && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    </td>
+
+                    {/* Date */}
+                    <td className="py-3 px-4 font-mono text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                      {tx.date}
+                    </td>
+
+                    {/* Merchant & Raw hover */}
+                    <td className="py-3 px-4 max-w-xs truncate">
+                      <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                        {tx.cleanMerchant}
+                      </div>
+                      <div className="text-[10px] text-zinc-400 truncate" title={tx.rawDescription}>
+                        {tx.rawDescription}
+                      </div>
+                    </td>
+
+                    {/* Category Selector Dropdown */}
+                    <td className="py-3 px-4">
+                      <select
+                        value={tx.category}
+                        onChange={(e) =>
+                          handleInlineCategoryChange(
+                            tx.id,
+                            tx.cleanMerchant,
+                            e.target.value as ExpenseCategory
+                          )
+                        }
+                        className="text-[11px] py-1 px-2 rounded-lg border border-zinc-300/80 dark:border-zinc-700 bg-offwhite-surface dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      >
+                        {ALL_CATEGORIES.map((cat) => (
+                          <option key={cat} value={cat}>
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* Payment Type */}
+                    <td className="py-3 px-4 whitespace-nowrap text-zinc-500">
+                      {tx.paymentType ? (
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-200/60 dark:bg-zinc-800 text-[10px]">
+                          {tx.paymentType}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400 text-[10px]">—</span>
+                      )}
+                    </td>
+
+                    {/* Amount */}
+                    <td className="py-3 px-4 text-right font-mono font-bold whitespace-nowrap">
+                      <span
+                        className={
+                          tx.type === 'expense'
+                            ? 'text-zinc-900 dark:text-zinc-100'
+                            : tx.type === 'refund'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-blue-600 dark:text-blue-400'
+                        }
+                      >
+                        {tx.type === 'refund' ? '+' : tx.type === 'expense' ? '-' : ''}$
+                        {tx.amount.toFixed(2)}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => handleDeleteTx(tx.id)}
+                        className="p-1 rounded text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                        title="Delete transaction"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* CSV Import Modal */}
+      <CsvImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={handleImportBatch}
+        existingTransactions={transactions}
+        categoryRules={categoryRules}
+      />
+
+      {/* Add Manual Transaction Modal */}
+      {isAddTxModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-offwhite-surface dark:bg-[#12141e] border border-zinc-300 dark:border-zinc-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              Add Manual Transaction
+            </h3>
+            <form onSubmit={handleAddManualTx} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-zinc-500 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={newTxDate}
+                  onChange={(e) => setNewTxDate(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-zinc-500 mb-1">Merchant / Payee</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Starbucks, NTUC FairPrice"
+                  value={newTxMerchant}
+                  onChange={(e) => setNewTxMerchant(e.target.value)}
+                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-zinc-500 mb-1">Amount ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={newTxAmount}
+                    onChange={(e) => setNewTxAmount(e.target.value)}
+                    className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-500 mb-1">Type</label>
+                  <select
+                    value={newTxType}
+                    onChange={(e) => setNewTxType(e.target.value as TransactionType)}
+                    className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="refund">Refund</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-zinc-500 mb-1">Category</label>
+                <select
+                  value={newTxCategory}
+                  onChange={(e) => setNewTxCategory(e.target.value as ExpenseCategory)}
+                  className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+                >
+                  {ALL_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTxModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/20"
+                >
+                  Add Transaction
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Adjust Budgets Modal */}
+      {isBudgetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-offwhite-surface dark:bg-[#12141e] border border-zinc-300 dark:border-zinc-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+              Adjust Monthly Category Budgets
+            </h3>
+            <p className="text-xs text-zinc-500">
+              Set monthly spending targets to keep your expenses within cognitive guardrails.
+            </p>
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+              {budgets.map((b, idx) => (
+                <div key={b.category} className="flex items-center justify-between text-xs gap-3">
+                  <span className="font-medium text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    {getCategoryIcon(b.category)}
+                    {b.category}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-zinc-400">$</span>
+                    <input
+                      type="number"
+                      value={b.monthlyLimit}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const copy = [...budgets];
+                        copy[idx] = { ...copy[idx], monthlyLimit: val };
+                        onUpdateBudgets(copy);
+                      }}
+                      className="w-24 p-1.5 text-right font-mono rounded-lg border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBudgetModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold shadow-md shadow-brand-600/20"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

@@ -5,8 +5,13 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-// Check if PostgreSQL is available via Railway DATABASE_URL
-const DATABASE_URL = process.env.DATABASE_URL;
+// Check if PostgreSQL is available via Railway or generic DATABASE_URL
+const DATABASE_URL = 
+  process.env.DATABASE_URL || 
+  process.env.DATABASE_PRIVATE_URL || 
+  process.env.DATABASE_PUBLIC_URL || 
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRESQL_URL;
 
 let pool = null;
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -28,48 +33,85 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+export function isPostgresConnected() {
+  return pool !== null;
+}
+
 // ==================== DATABASE INITIALIZATION ====================
+function determineSsl(url) {
+  if (!url) return false;
+  // Railway internal network (.railway.internal) and localhost do NOT support/require SSL
+  const isInternal = 
+    url.includes('railway.internal') || 
+    url.includes('localhost') || 
+    url.includes('127.0.0.1') || 
+    url.includes('sslmode=disable');
+  
+  if (isInternal) return false;
+  return process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false;
+}
+
+const TABLE_INIT_SQL = `
+  CREATE TABLE IF NOT EXISTS users (
+    id VARCHAR(255) PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    salt VARCHAR(255) NOT NULL,
+    created_at BIGINT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token VARCHAR(255) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    created_at BIGINT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS boards (
+    id VARCHAR(255) PRIMARY KEY,
+    owner_id VARCHAR(255),
+    tasks JSONB NOT NULL,
+    settings JSONB NOT NULL,
+    active_task_id VARCHAR(255),
+    updated_at BIGINT NOT NULL
+  );
+`;
+
 if (DATABASE_URL) {
-  console.log('[Database] Connecting to PostgreSQL via DATABASE_URL...');
+  console.log('[Database] DATABASE_URL detected. Connecting to PostgreSQL...');
+  const initialSsl = determineSsl(DATABASE_URL);
+
   pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' && !DATABASE_URL.includes('localhost') 
-      ? { rejectUnauthorized: false } 
-      : false,
+    ssl: initialSsl,
   });
 
-  // Initialize tables
-  pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id VARCHAR(255) PRIMARY KEY,
-      username VARCHAR(100) UNIQUE NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
-      salt VARCHAR(255) NOT NULL,
-      created_at BIGINT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS sessions (
-      token VARCHAR(255) PRIMARY KEY,
-      user_id VARCHAR(255) NOT NULL,
-      created_at BIGINT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS boards (
-      id VARCHAR(255) PRIMARY KEY,
-      owner_id VARCHAR(255),
-      tasks JSONB NOT NULL,
-      settings JSONB NOT NULL,
-      active_task_id VARCHAR(255),
-      updated_at BIGINT NOT NULL
-    );
-  `).then(() => {
-    console.log('[Database] PostgreSQL tables (users, sessions, boards) initialized successfully.');
-  }).catch((err) => {
-    console.error('[Database] Failed to initialize PostgreSQL tables, falling back to local file storage:', err.message);
-    pool = null;
-  });
+  pool.query(TABLE_INIT_SQL)
+    .then(() => {
+      console.log('[Database] ✅ PostgreSQL tables (users, sessions, boards) initialized successfully.');
+    })
+    .catch(async (err) => {
+      // If SSL failed (common on Railway private networking), retry once without SSL
+      if (initialSsl && (err.message.includes('SSL') || err.message.includes('ssl') || err.code === 'ECONNRESET')) {
+        console.warn('[Database] SSL handshake failed, retrying connection with ssl: false...');
+        try {
+          await pool.end().catch(() => {});
+          pool = new Pool({
+            connectionString: DATABASE_URL,
+            ssl: false,
+          });
+          await pool.query(TABLE_INIT_SQL);
+          console.log('[Database] ✅ PostgreSQL tables initialized successfully (ssl: false).');
+          return;
+        } catch (retryErr) {
+          console.error('[Database] Failed to connect to PostgreSQL without SSL:', retryErr.message);
+        }
+      }
+      console.error('[Database] ❌ Failed to initialize PostgreSQL tables, falling back to local file storage:', err.message);
+      pool = null;
+    });
 } else {
-  console.log('[Database] No DATABASE_URL found. Using local JSON store at data/boards.json');
+  console.warn('[Database] ⚠️ No DATABASE_URL found. Using local JSON store at data/boards.json');
+  console.warn('[Database] ⚠️ Note: On cloud platforms like Railway, container disks are ephemeral. Attach a PostgreSQL database to persist users across git pushes.');
 }
 
 // Local file storage helpers

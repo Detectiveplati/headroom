@@ -58,3 +58,45 @@ export interface User {
   username: string;
   createdAt?: number;
 }
+
+export type ActiveTab = 'tasks' | 'expenses';
+
+export type TransactionType = 'expense' | 'refund' | 'transfer' | 'income';
+
+export type ExpenseCategory =
+  | 'Food & Dining'
+  | 'Groceries'
+  | 'Transport & Petrol'
+  | 'Shopping & E-Commerce'
+  | 'Entertainment & Gaming'
+  | 'Personal Care & Services'
+  | 'Bills & Utilities'
+  | 'Transfer / Payment'
+  | 'Uncategorized';
+
+export interface Transaction {
+  id: string;
+  date: string; // YYYY-MM-DD or raw date
+  postingDate?: string;
+  rawDescription: string;
+  cleanMerchant: string;
+  amount: number;
+  type: TransactionType;
+  category: ExpenseCategory;
+  paymentType?: string;
+  accountName?: string;
+  reviewed: boolean;
+  createdAt: number;
+}
+
+export interface CategoryBudget {
+  category: ExpenseCategory;
+  monthlyLimit: number;
+}
+
+export interface CardMetaInfo {
+  accountName?: string;
+  statementDate?: string;
+  creditLimit?: number;
+  availableLimit?: number;
+}

@@ -22,12 +22,16 @@ import {
   Moon,
   Monitor,
   User as UserIcon,
-  LogOut
+  LogOut,
+  Wallet,
+  CheckSquare
 } from 'lucide-react';
-import { Task, AppSettings, TaskContext, ThemeMode, User } from '../types';
+import { Task, AppSettings, TaskContext, ThemeMode, User, ActiveTab } from '../types';
 import { SyncStatus } from '../utils/sync';
 
 interface FocusHUDProps {
+  activeTab: ActiveTab;
+  onSelectTab: (tab: ActiveTab) => void;
   activeTask: Task | null;
   doingTasks: Task[];
   syncStatus: SyncStatus;
@@ -50,6 +54,8 @@ interface FocusHUDProps {
 }
 
 export const FocusHUD: React.FC<FocusHUDProps> = ({
+  activeTab,
+  onSelectTab,
   activeTask,
   doingTasks,
   syncStatus,
@@ -142,6 +148,34 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
                 </span>
               </span>
             </div>
+          </div>
+
+          {/* Module Switcher: Board vs Expenses */}
+          <div className="flex items-center bg-offwhite-subtle dark:bg-zinc-900/90 border border-zinc-300/70 dark:border-zinc-800 p-0.5 rounded-xl text-xs font-medium shadow-sm">
+            <button
+              onClick={() => onSelectTab('tasks')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition text-[11px] ${
+                activeTab === 'tasks'
+                  ? 'bg-zinc-800 text-white dark:bg-zinc-100 dark:text-zinc-900 font-semibold shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+              title="Kanban Focus Board (Alt+1)"
+            >
+              <CheckSquare className="w-3 h-3" />
+              <span>Board</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('expenses')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition text-[11px] ${
+                activeTab === 'expenses'
+                  ? 'bg-brand-600 text-white font-semibold shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+              title="Expenses & Budget Cockpit (Alt+2)"
+            >
+              <Wallet className="w-3 h-3" />
+              <span>Expenses</span>
+            </button>
           </div>
 
           <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800 hidden sm:block" />
