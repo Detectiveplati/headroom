@@ -55,6 +55,7 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'Groceries',
   'Transport & Petrol',
   'Shopping & E-Commerce',
+  'Subscriptions',
   'Entertainment & Gaming',
   'Personal Care & Services',
   'Bills & Utilities',

@@ -206,6 +206,19 @@ export function isOfficeClaimDescription(description: string): boolean {
   return /OFFICE\s+CLAIM|CLAIM\s+REIMBURSEMENT|EXPENSE\s+REIMBURSEMENT/.test(description.toUpperCase());
 }
 
+export function isAmbiguousGrabDescription(description: string): boolean {
+  const upper = description.toUpperCase();
+  const isGrabCharge = /\bGRAB(?:\*|\s|$)/.test(upper);
+  const isKnownRide = /GRAB\s*\*?\s*(?:CAR|RIDE|TAXI)|GRABCAR|GRABRIDE/.test(upper);
+  return isGrabCharge && !isKnownRide;
+}
+
+export function isSubscriptionDescription(description: string): boolean {
+  return /ELEVENLABS|SPOTIFY|NETFLIX|YOUTUBE|DISNEY|APPLE\.COM\/BILL|GOOGLE \*|OPENAI|ANTHROPIC|ADOBE|MICROSOFT\s*(?:365|SUBSCRIPTION)|NOTION|CANVA|DROPBOX|ICLOUD/.test(
+    description.toUpperCase()
+  );
+}
+
 // Auto-categorize based on description, amounts, and user-defined custom rules
 export function categorizeTransaction(
   rawDesc: string,
@@ -226,6 +239,8 @@ export function categorizeTransaction(
       upper
     );
   const isOfficeClaim = isOfficeClaimDescription(rawDesc);
+  const isAmbiguousGrab = isAmbiguousGrabDescription(rawDesc);
+  const isSubscription = isSubscriptionDescription(rawDesc);
 
   // Check custom user memory rules first (with regex and substring matching)
   for (const [pattern, savedCategory] of Object.entries(customRules)) {
@@ -304,7 +319,8 @@ export function categorizeTransaction(
   // 4. Merchant refunds & credits
   if (credit > 0 && debit === 0) {
     let cat: ExpenseCategory = 'Shopping & E-Commerce';
-    if (/GRAB|TAXI|COMFORT/.test(upper)) cat = 'Transport & Petrol';
+    if (/TAXI|COMFORT|GRAB\s*\*?\s*(?:CAR|RIDE|TAXI)|GRABCAR|GRABRIDE/.test(upper)) cat = 'Transport & Petrol';
+    if (isAmbiguousGrab) cat = 'Food & Dining';
     if (/URBANCOMPANY/.test(upper)) cat = 'Personal Care & Services';
     return {
       cleanMerchant: cleanName,
@@ -335,7 +351,7 @@ export function categorizeTransaction(
 
   // 4. Food & Dining
   if (
-    /LUCKIN|WINGSTOP|LONG JOHN|MCDONALD|KFC|SHAKE SHACK|JOLLIBEE|GENKI|SUSHIRO|SONG FA|LLAO LLAO|KOPIFELLAS|BINGXUE|BREADTALK|MONSTER CHILI|STUFF'D|TIAN TIAN|SHABU SAI|COCOLUSH|YES LEMON|SUPERGREEN|BEE CHENG|KOUFU|KOPITIAM|HAWKER|RESTAURANT|CAFE|BAKERY|COFFEE|TEA|PIZZA|BURGER|NOODLE|RICE/.test(
+    isAmbiguousGrab || /LUCKIN|WINGSTOP|LONG JOHN|MCDONALD|KFC|SHAKE SHACK|JOLLIBEE|GENKI|SUSHIRO|SONG FA|LLAO LLAO|KOPIFELLAS|BINGXUE|BREADTALK|MONSTER CHILI|STUFF'D|TIAN TIAN|SHABU SAI|COCOLUSH|YES LEMON|SUPERGREEN|BEE CHENG|KOUFU|KOPITIAM|HAWKER|RESTAURANT|CAFE|BAKERY|COFFEE|TEA|PIZZA|BURGER|NOODLE|RICE/.test(
       upper
     )
   ) {
@@ -344,23 +360,28 @@ export function categorizeTransaction(
 
   // 5. Transport & Petrol
   if (
-    /GRAB\*|BUS\/MRT|TRANSIT|SIMPLYGO|SPC |SHELL|ESSO|CALTEX|SINOPEC|PETROL|VICOM|TAXI|GOJEK|COMFORTDELGRO|TADA/.test(
+    /GRAB\s*\*?\s*(?:CAR|RIDE|TAXI)|GRABCAR|GRABRIDE|BUS\/MRT|TRANSIT|SIMPLYGO|SPC |SHELL|ESSO|CALTEX|SINOPEC|PETROL|VICOM|TAXI|GOJEK|COMFORTDELGRO|TADA/.test(
       upper
     )
   ) {
     return { cleanMerchant: cleanName, category: 'Transport & Petrol', type: 'expense', amount };
   }
 
-  // 6. Entertainment & Digital
+  // 6. Recurring digital subscriptions
+  if (isSubscription) {
+    return { cleanMerchant: cleanName, category: 'Subscriptions', type: 'expense', amount };
+  }
+
+  // 7. Entertainment & Gaming
   if (
-    /STEAMGAMES|STEAM|PLAYSTATION|NINTENDO|XBOX|ARCADE PLANET|ELEVENLABS|SPOTIFY|NETFLIX|YOUTUBE|DISNEY|APPLE\.COM\/BILL|GOOGLE \*|OPENAI|ANTHROPIC/.test(
+    /STEAMGAMES|STEAM|PLAYSTATION|NINTENDO|XBOX|ARCADE PLANET/.test(
       upper
     )
   ) {
     return { cleanMerchant: cleanName, category: 'Entertainment & Gaming', type: 'expense', amount };
   }
 
-  // 7. Shopping & E-Commerce
+  // 8. Shopping & E-Commerce
   if (
     /SHOPEE|LAZADA|TAOBAO|TIKTOK SHOP|DAISO|TOYOGO|H&M|HM SG|ZARA|UNIQLO|AMAZON|ALIEXPRESS|SEPHORA|WATSONS|GUARDIAN|IKEA/.test(
       upper

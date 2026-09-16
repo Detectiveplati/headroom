@@ -11,6 +11,7 @@ export const EXPENSE_CATEGORIES = [
   'Groceries',
   'Transport & Petrol',
   'Shopping & E-Commerce',
+  'Subscriptions',
   'Entertainment & Gaming',
   'Personal Care & Services',
   'Bills & Utilities',
@@ -56,6 +57,8 @@ For each transaction:
 - For PayNow, use 'PayNow Transfers' and type 'transfer' for a likely person-to-person transfer. If the recipient is clearly a business, categorize the business normally.
 - For non-refund incoming deposits, including Incoming PayNow, FAST payments from a person, or government payouts, use 'Money In' and type 'income'.
 - Use 'Office Claims' for an expense explicitly identified as an office claim or reimbursement; statement credits for those claims are type 'refund'.
+- For a Grab charge that does not explicitly say GrabCar, GrabRide, or Taxi, default to 'Food & Dining'; only clearly identified rides belong in 'Transport & Petrol'.
+- Use 'Subscriptions' for recurring streaming, cloud, software, or membership charges (for example Spotify, Netflix, iCloud, Adobe, ChatGPT, or Notion).
 - category: Select the most accurate category from:
   ${EXPENSE_CATEGORIES.map((c) => `"${c}"`).join(', ')}.
 
@@ -195,6 +198,7 @@ const CATEGORY_BY_CODE = {
   grocery: 'Groceries',
   transport: 'Transport & Petrol',
   shopping: 'Shopping & E-Commerce',
+  subscriptions: 'Subscriptions',
   entertainment: 'Entertainment & Gaming',
   personal: 'Personal Care & Services',
   bills: 'Bills & Utilities',
@@ -264,7 +268,8 @@ export async function categorizeUnknownTransactions(rawItems = []) {
   const compactItems = uniqueList.map((item) => [item.id, item.representativeDescription]);
   const promptText = `Classify each bank transaction. Return exactly one result for every input ID.
 Fields: i=input ID; m=clean merchant; c=category code; p=uppercase reusable keyword/short regex; t=type code.
-Categories: income=Salary & Income, moneyin=Money In (non-refund incoming deposits), office=Office Claims, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, paynow=PayNow Transfers, unknown=Uncategorized.
+Categories: income=Salary & Income, moneyin=Money In (non-refund incoming deposits), office=Office Claims, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, subscriptions=Subscriptions, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, paynow=PayNow Transfers, unknown=Uncategorized.
+Default ambiguous Grab charges to food; use transport only for GrabCar, GrabRide, or explicitly identified taxi trips.
 Types: e=expense, i=income, r=refund, t=transfer. Use unknown when uncertain. Do not include prose.
 Input: ${JSON.stringify(compactItems)}`;
 

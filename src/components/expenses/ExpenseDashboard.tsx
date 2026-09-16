@@ -36,7 +36,7 @@ import {
 import { CsvImportModal, StatementUploadContext } from './CsvImportModal';
 import { BalanceSheetOverview } from './BalanceSheetOverview';
 import { StatementHistoryModal } from './StatementHistoryModal';
-import { getTransactionTypeForCategory, isIncomingMoneyDescription } from '../../utils/csvParser';
+import { getTransactionTypeForCategory, isAmbiguousGrabDescription, isIncomingMoneyDescription, isSubscriptionDescription } from '../../utils/csvParser';
 import { OfficeClaimReimbursementMethod } from '../../types';
 import { getManualCategoryRulePattern } from '../../utils/manualCategoryRule';
 
@@ -64,6 +64,7 @@ const ALL_CATEGORIES: ExpenseCategory[] = [
   'Groceries',
   'Transport & Petrol',
   'Shopping & E-Commerce',
+  'Subscriptions',
   'Entertainment & Gaming',
   'Personal Care & Services',
   'Bills & Utilities',
@@ -112,6 +113,35 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     onUpdateTransactions((previous) => previous.map((transaction) => (
       transaction.type === 'refund' && isIncomingMoneyDescription(transaction.rawDescription)
         ? { ...transaction, category: 'Money In', type: 'income', reviewed: false }
+        : transaction
+    )));
+  }, [transactions, onUpdateTransactions]);
+
+  // Move known recurring merchants out of the former Entertainment bucket.
+  useEffect(() => {
+    const needsSubscriptionMigration = transactions.some((transaction) => (
+      transaction.category === 'Entertainment & Gaming' && isSubscriptionDescription(transaction.rawDescription)
+    ));
+    if (!needsSubscriptionMigration) return;
+
+    onUpdateTransactions((previous) => previous.map((transaction) => (
+      transaction.category === 'Entertainment & Gaming' && isSubscriptionDescription(transaction.rawDescription)
+        ? { ...transaction, category: 'Subscriptions', reviewed: false }
+        : transaction
+    )));
+  }, [transactions, onUpdateTransactions]);
+
+  // Older imports defaulted generic Grab descriptions to transport. Keep explicit
+  // GrabCar/GrabRide entries untouched, but align ambiguous charges to GrabFood.
+  useEffect(() => {
+    const needsGrabMigration = transactions.some((transaction) => (
+      transaction.category === 'Transport & Petrol' && isAmbiguousGrabDescription(transaction.rawDescription)
+    ));
+    if (!needsGrabMigration) return;
+
+    onUpdateTransactions((previous) => previous.map((transaction) => (
+      transaction.category === 'Transport & Petrol' && isAmbiguousGrabDescription(transaction.rawDescription)
+        ? { ...transaction, category: 'Food & Dining', reviewed: false }
         : transaction
     )));
   }, [transactions, onUpdateTransactions]);
@@ -238,6 +268,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       'Groceries': 0,
       'Transport & Petrol': 0,
       'Shopping & E-Commerce': 0,
+      'Subscriptions': 0,
       'Entertainment & Gaming': 0,
       'Personal Care & Services': 0,
       'Bills & Utilities': 0,
@@ -316,6 +347,8 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         return <Car className="w-3.5 h-3.5 text-blue-500" />;
       case 'Shopping & E-Commerce':
         return <Smile className="w-3.5 h-3.5 text-purple-500" />;
+      case 'Subscriptions':
+        return <CreditCard className="w-3.5 h-3.5 text-violet-500" />;
       case 'Entertainment & Gaming':
         return <Tv className="w-3.5 h-3.5 text-pink-500" />;
       case 'Personal Care & Services':
