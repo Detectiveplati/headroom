@@ -8,7 +8,6 @@ import {
   Trash2, 
   Check, 
   Sparkles, 
-  TrendingDown, 
   TrendingUp, 
   Layers,
   Sliders, 
@@ -132,11 +131,16 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     });
   }, [transactions, selectedAccountId, selectedCategory, selectedType, selectedMonth, searchQuery]);
 
-  // Aggregate stats (calculated on active month or overall)
+  // Keep dashboard guidance anchored to one calendar month, even when the ledger shows all history.
+  const summaryMonth = selectedMonth === 'all' ? new Date().toISOString().slice(0, 7) : selectedMonth;
+
+  // Aggregate stats for the visible account and dashboard month.
   const stats = useMemo(() => {
-    const scope = selectedMonth === 'all' 
-      ? transactions 
-      : transactions.filter((t) => t.date && t.date.startsWith(selectedMonth));
+    const scope = transactions.filter((transaction) => {
+      const belongsToMonth = transaction.date?.startsWith(summaryMonth);
+      const belongsToAccount = selectedAccountId === 'all' || transaction.accountId === selectedAccountId;
+      return belongsToMonth && belongsToAccount;
+    });
 
     const totalSpend = scope
       .filter((t) => t.type === 'expense')
@@ -183,10 +187,18 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     const unreviewedCount = scope.filter((t) => !t.reviewed).length;
 
     // Daily pace / burn rate calculation
-    const daysInMonth = 30;
-    const currentDay = Math.min(new Date().getDate(), daysInMonth);
-    const dailyPace = netSpend > 0 ? netSpend / Math.max(currentDay, 1) : 0;
+    const [year, month] = summaryMonth.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    const daysElapsed = summaryMonth < currentMonthKey
+      ? daysInMonth
+      : summaryMonth === currentMonthKey
+        ? Math.min(new Date().getDate(), daysInMonth)
+        : 0;
+    const dailyPace = netSpend > 0 && daysElapsed > 0 ? netSpend / daysElapsed : 0;
     const projectedSpend = dailyPace * daysInMonth;
+    const totalBudget = budgets.reduce((sum, budget) => sum + budget.monthlyLimit, 0);
+    const expectedSpend = daysElapsed > 0 ? (totalBudget * daysElapsed) / daysInMonth : 0;
 
     return {
       totalSpend,
@@ -199,8 +211,31 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       unreviewedCount,
       dailyPace,
       projectedSpend,
+      totalBudget,
+      budgetRemaining: totalBudget - netSpend,
+      expectedSpend,
+      isOverPace: netSpend > expectedSpend,
     };
-  }, [transactions, selectedMonth]);
+  }, [transactions, budgets, selectedAccountId, summaryMonth]);
+
+  const balanceSummary = useMemo(() => {
+    const liquidAssets = accounts
+      .filter((account) => account.type === 'debit' || account.type === 'cash')
+      .reduce((sum, account) => sum + account.currentBalance, 0);
+    const liabilities = accounts
+      .filter((account) => account.type === 'credit')
+      .reduce((sum, account) => sum + Math.abs(account.currentBalance), 0);
+    const uploadedAccountIds = new Set(
+      uploadLogs.filter((upload) => upload.month === summaryMonth).map((upload) => upload.accountId)
+    );
+
+    return {
+      liquidAssets,
+      liabilities,
+      netPosition: liquidAssets - liabilities,
+      uploadedCount: accounts.filter((account) => uploadedAccountIds.has(account.id)).length,
+    };
+  }, [accounts, uploadLogs, summaryMonth]);
 
   // Category Icon Mapper
   const getCategoryIcon = (category: ExpenseCategory) => {
@@ -478,97 +513,70 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         onTriggerUpload={handleTriggerUploadForAccount}
       />
 
-      {/* Cockpit Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        {/* Monthly Income (Salaries / Inbound Deposits) */}
+      {/* Financial cockpit: position, spendable cash, pace, and statement completeness. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+        {/* Net position */}
         <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Monthly Income (Salaries)</span>
+            <span>Net Position</span>
             <Wallet className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="mt-2">
-            <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-              SGD ${stats.totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className={`text-2xl font-bold font-mono ${balanceSummary.netPosition >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+              SGD ${balanceSummary.netPosition.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-zinc-500">
-              <span>Net Cashflow:</span>
-              <span className={`font-mono font-semibold ${stats.netCashflow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                {stats.netCashflow >= 0 ? '+' : '-'}${Math.abs(stats.netCashflow).toFixed(2)}
-              </span>
+              <span>Assets ${balanceSummary.liquidAssets.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+              <span>•</span>
+              <span>Liabilities ${balanceSummary.liabilities.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
             </div>
           </div>
         </div>
 
-        {/* Net Monthly Spend */}
+        {/* Free to spend */}
         <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Net Spend (Excl. Payments)</span>
-            <TrendingDown className="w-4 h-4 text-red-500" />
+            <span>Free to Spend</span>
+            <CreditCard className="w-4 h-4 text-brand-500" />
           </div>
           <div className="mt-2">
-            <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
-              SGD ${stats.netSpend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className={`text-2xl font-bold font-mono ${stats.budgetRemaining >= 0 ? 'text-zinc-900 dark:text-zinc-100' : 'text-red-500'}`}>
+              SGD ${Math.abs(stats.budgetRemaining).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="flex items-center gap-2 mt-1 text-[11px] text-zinc-500">
-              <span>Gross: ${stats.totalSpend.toFixed(0)}</span>
-              <span>•</span>
-              <span className="text-emerald-600 dark:text-emerald-400">Refunds: -${stats.totalRefunds.toFixed(2)}</span>
+              <span>{stats.budgetRemaining >= 0 ? 'left from' : 'over'} ${stats.totalBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })} monthly plan</span>
             </div>
           </div>
         </div>
 
-        {/* Daily Burn Rate & Pace */}
+        {/* Daily pace */}
         <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Daily Burn Rate & Forecast</span>
-            <TrendingUp className="w-4 h-4 text-amber-500" />
+            <span>Spending Pace</span>
+            <TrendingUp className={`w-4 h-4 ${stats.isOverPace ? 'text-red-500' : 'text-emerald-500'}`} />
+          </div>
+          <div className="mt-2">
+            <div className={`text-2xl font-bold font-mono ${stats.isOverPace ? 'text-red-500' : 'text-zinc-900 dark:text-zinc-100'}`}>
+              {stats.isOverPace ? 'Over pace' : 'On pace'}
+            </div>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              ${stats.netSpend.toFixed(0)} spent • ${stats.expectedSpend.toFixed(0)} expected by today
+            </div>
+          </div>
+        </div>
+
+        {/* Statement coverage */}
+        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Statement Coverage</span>
+            <FileText className={`w-4 h-4 ${balanceSummary.uploadedCount === accounts.length && accounts.length > 0 ? 'text-emerald-500' : 'text-amber-500'}`} />
           </div>
           <div className="mt-2">
             <div className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100">
-              ~${stats.dailyPace.toFixed(2)} <span className="text-xs font-normal text-zinc-400">/ day</span>
+              {balanceSummary.uploadedCount}/{accounts.length}
             </div>
             <div className="mt-1 text-[11px] text-zinc-500">
-              Projected month total: <strong className="text-zinc-800 dark:text-zinc-200 font-mono">${stats.projectedSpend.toFixed(0)}</strong>
-            </div>
-          </div>
-        </div>
-
-        {/* Credit Limit & Available Headroom */}
-        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Available Card Headroom</span>
-            <CreditCard className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="mt-2">
-            {cardMeta.availableLimit !== undefined ? (
-              <>
-                <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                  SGD ${cardMeta.availableLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </div>
-                {cardMeta.creditLimit !== undefined && (
-                  <div className="mt-1 text-[11px] text-zinc-500">
-                    Limit: SGD ${cardMeta.creditLimit.toLocaleString()}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-sm text-zinc-400 py-2">Import a statement to view limit</div>
-            )}
-          </div>
-        </div>
-
-        {/* Transfers & Bill Payments (Preserved separately) */}
-        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Card Payments / Transfers</span>
-            <ArrowRightLeft className="w-4 h-4 text-blue-500" />
-          </div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400">
-              ${stats.totalTransfers.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </div>
-            <div className="mt-1 text-[11px] text-zinc-500">
-              Excluded from spend to prevent double-counting
+              {accounts.length === 0 ? 'Add an account to begin reconciliation' : `${Math.max(accounts.length - balanceSummary.uploadedCount, 0)} statement${accounts.length - balanceSummary.uploadedCount === 1 ? '' : 's'} still needed for ${summaryMonth}`}
             </div>
           </div>
         </div>
