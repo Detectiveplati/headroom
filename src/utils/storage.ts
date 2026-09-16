@@ -372,9 +372,11 @@ export const DEFAULT_ACCOUNTS: TrackedAccount[] = [
   },
 ];
 
-export function loadStoredAccounts(): TrackedAccount[] {
+export function loadStoredAccounts(userId?: string): TrackedAccount[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+    purgeLegacyUnscopedFinanceData();
+    const key = userId ? getUserFinanceKey(STORAGE_KEY_ACCOUNTS, userId) : STORAGE_KEY_ACCOUNTS;
+    const raw = localStorage.getItem(key);
     if (!raw) {
       return DEFAULT_ACCOUNTS;
     }
@@ -389,17 +391,20 @@ export function loadStoredAccounts(): TrackedAccount[] {
   }
 }
 
-export function saveStoredAccounts(accounts: TrackedAccount[]): void {
+export function saveStoredAccounts(userId: string | undefined, accounts: TrackedAccount[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(accounts));
+    const key = userId ? getUserFinanceKey(STORAGE_KEY_ACCOUNTS, userId) : STORAGE_KEY_ACCOUNTS;
+    localStorage.setItem(key, JSON.stringify(accounts));
   } catch (e) {
     console.error('Failed to save accounts to localStorage', e);
   }
 }
 
-export function loadStoredUploadLogs(): MonthlyAccountUpload[] {
+export function loadStoredUploadLogs(userId?: string): MonthlyAccountUpload[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_UPLOAD_LOGS);
+    purgeLegacyUnscopedFinanceData();
+    const key = userId ? getUserFinanceKey(STORAGE_KEY_UPLOAD_LOGS, userId) : STORAGE_KEY_UPLOAD_LOGS;
+    const raw = localStorage.getItem(key);
     if (!raw) {
       return [];
     }
@@ -414,9 +419,10 @@ export function loadStoredUploadLogs(): MonthlyAccountUpload[] {
   }
 }
 
-export function saveStoredUploadLogs(logs: MonthlyAccountUpload[]): void {
+export function saveStoredUploadLogs(userId: string | undefined, logs: MonthlyAccountUpload[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY_UPLOAD_LOGS, JSON.stringify(logs));
+    const key = userId ? getUserFinanceKey(STORAGE_KEY_UPLOAD_LOGS, userId) : STORAGE_KEY_UPLOAD_LOGS;
+    localStorage.setItem(key, JSON.stringify(logs));
   } catch (e) {
     console.error('Failed to save upload logs to localStorage', e);
   }

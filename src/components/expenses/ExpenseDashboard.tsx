@@ -10,7 +10,6 @@ import {
   Sparkles, 
   TrendingDown, 
   TrendingUp, 
-  Layers, 
   Sliders, 
   Download, 
   ShoppingBag,
@@ -28,9 +27,13 @@ import {
   TransactionType, 
   ExpenseCategory, 
   CategoryBudget, 
-  CardMetaInfo 
+  CardMetaInfo,
+  TrackedAccount,
+  MonthlyAccountUpload
 } from '../../types';
-import { CsvImportModal } from './CsvImportModal';
+import { CsvImportModal, StatementUploadContext } from './CsvImportModal';
+import { BalanceSheetOverview } from './BalanceSheetOverview';
+import { MonthlyUploadTracker } from './MonthlyUploadTracker';
 
 interface ExpenseDashboardProps {
   transactions: Transaction[];
@@ -42,6 +45,10 @@ interface ExpenseDashboardProps {
   onSaveRulesBatch?: (newRules: Record<string, ExpenseCategory>) => void;
   cardMeta: CardMetaInfo;
   onUpdateCardMeta: (meta: CardMetaInfo) => void;
+  accounts: TrackedAccount[];
+  onUpdateAccounts: (accounts: TrackedAccount[]) => void;
+  uploadLogs: MonthlyAccountUpload[];
+  onUpdateUploadLogs: (updater: MonthlyAccountUpload[] | ((prev: MonthlyAccountUpload[]) => MonthlyAccountUpload[])) => void;
 }
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
@@ -67,15 +74,21 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   onSaveRulesBatch,
   cardMeta,
   onUpdateCardMeta,
+  accounts,
+  onUpdateAccounts,
+  uploadLogs,
+  onUpdateUploadLogs,
 }) => {
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'all'>('all');
   const [selectedType, setSelectedType] = useState<TransactionType | 'all'>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedAccountId, setSelectedAccountId] = useState<string | 'all'>('all');
 
   // Modals state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importTargetAccountId, setImportTargetAccountId] = useState<string | undefined>(undefined);
   const [isAddTxModalOpen, setIsAddTxModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
 
@@ -100,6 +113,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
+      if (selectedAccountId !== 'all' && tx.accountId && tx.accountId !== selectedAccountId) return false;
       if (selectedCategory !== 'all' && tx.category !== selectedCategory) return false;
       if (selectedType !== 'all' && tx.type !== selectedType) return false;
       if (selectedMonth !== 'all' && (!tx.date || !tx.date.startsWith(selectedMonth))) return false;
@@ -109,12 +123,13 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         const matchesMerchant = tx.cleanMerchant.toLowerCase().includes(query);
         const matchesRaw = tx.rawDescription.toLowerCase().includes(query);
         const matchesCat = tx.category.toLowerCase().includes(query);
-        if (!matchesMerchant && !matchesRaw && !matchesCat) return false;
+        const matchesAcc = (tx.accountName || '').toLowerCase().includes(query);
+        if (!matchesMerchant && !matchesRaw && !matchesCat && !matchesAcc) return false;
       }
 
       return true;
     });
-  }, [transactions, selectedCategory, selectedType, selectedMonth, searchQuery]);
+  }, [transactions, selectedAccountId, selectedCategory, selectedType, selectedMonth, searchQuery]);
 
   // Aggregate stats (calculated on active month or overall)
   const stats = useMemo(() => {
@@ -213,11 +228,54 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   };
 
   // Handlers
-  const handleImportBatch = (newTxs: Transaction[], meta: CardMetaInfo) => {
+  const handleImportBatch = (
+    newTxs: Transaction[],
+    meta: CardMetaInfo,
+    uploadContext?: StatementUploadContext
+  ) => {
     onUpdateTransactions((prev) => [...newTxs, ...prev]);
-    if (meta.accountName || meta.creditLimit) {
+
+    if (meta.accountName || meta.creditLimit || meta.closingBalance !== undefined) {
       onUpdateCardMeta({ ...cardMeta, ...meta });
     }
+
+    if (uploadContext?.accountId) {
+      if (uploadContext.closingBalance !== undefined) {
+        onUpdateAccounts(
+          accounts.map((a) =>
+            a.id === uploadContext.accountId
+              ? {
+                  ...a,
+                  currentBalance: uploadContext.closingBalance!,
+                  lastReconciledMonth: uploadContext.month || a.lastReconciledMonth,
+                }
+              : a
+          )
+        );
+      }
+
+      const newLog: MonthlyAccountUpload = {
+        id: `up_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        accountId: uploadContext.accountId,
+        month: uploadContext.month || (newTxs[0]?.date ? newTxs[0].date.slice(0, 7) : new Date().toISOString().slice(0, 7)),
+        uploadedAt: Date.now(),
+        fileName: uploadContext.fileName || 'Bank Statement',
+        statementPeriod: meta.statementPeriod || meta.statementDate,
+        startingBalance: uploadContext.startingBalance,
+        closingBalance: uploadContext.closingBalance,
+        transactionCount: newTxs.length,
+      };
+
+      onUpdateUploadLogs((prev) => [
+        newLog,
+        ...prev.filter((l) => !(l.accountId === newLog.accountId && l.month === newLog.month)),
+      ]);
+    }
+  };
+
+  const handleTriggerUploadForAccount = (accId?: string) => {
+    setImportTargetAccountId(accId);
+    setIsImportModalOpen(true);
   };
 
   const handleInlineCategoryChange = (txId: string, merchant: string, newCat: ExpenseCategory) => {
@@ -262,8 +320,14 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     const amountNum = parseFloat(newTxAmount);
     if (!newTxMerchant.trim() || isNaN(amountNum) || amountNum <= 0) return;
 
+    const chosenAcc = selectedAccountId !== 'all'
+      ? accounts.find((a) => a.id === selectedAccountId)
+      : (accounts.length > 0 ? accounts[0] : undefined);
+
     const newTx: Transaction = {
       id: `tx_${Date.now()}_manual`,
+      accountId: chosenAcc?.id,
+      accountName: chosenAcc?.name,
       date: newTxDate,
       rawDescription: newTxMerchant.trim(),
       cleanMerchant: newTxMerchant.trim(),
@@ -395,6 +459,24 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         </div>
       </div>
 
+      {/* 1. Balance Sheet Overview (Liquid Assets vs Liabilities) */}
+      <BalanceSheetOverview
+        accounts={accounts}
+        onUpdateAccounts={onUpdateAccounts}
+        selectedAccountId={selectedAccountId}
+        onSelectAccount={setSelectedAccountId}
+      />
+
+      {/* 2. Monthly Statement Reconciliation & Upload Tracker */}
+      <MonthlyUploadTracker
+        accounts={accounts}
+        uploadLogs={uploadLogs}
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        availableMonths={availableMonths}
+        onTriggerUpload={handleTriggerUploadForAccount}
+      />
+
       {/* Cockpit Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* Monthly Income (Salaries / Inbound Deposits) */}
@@ -488,74 +570,6 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
               Excluded from spend to prevent double-counting
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Category Budget Breakdown Bar Section */}
-      <div className="p-5 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Layers className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-            Category Budget Breakdown
-          </h2>
-          <button
-            onClick={() => setIsBudgetModalOpen(true)}
-            className="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium"
-          >
-            Adjust Targets
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
-          {budgets.map((b) => {
-            const spent = stats.categorySpend[b.category] || 0;
-            const pct = b.monthlyLimit > 0 ? Math.round((spent / b.monthlyLimit) * 100) : 0;
-            const isOver = spent > b.monthlyLimit;
-
-            return (
-              <div
-                key={b.category}
-                onClick={() => setSelectedCategory(b.category === selectedCategory ? 'all' : b.category)}
-                className={`p-3 rounded-xl border transition cursor-pointer ${
-                  selectedCategory === b.category
-                    ? 'border-brand-500 bg-brand-500/5 dark:bg-brand-500/10'
-                    : 'border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 bg-offwhite-subtle/50 dark:bg-zinc-900/50'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <div className="flex items-center gap-1.5 font-medium text-zinc-800 dark:text-zinc-200">
-                    {getCategoryIcon(b.category)}
-                    <span>{b.category}</span>
-                  </div>
-                  <span
-                    className={`font-mono font-semibold text-[11px] ${
-                      isOver
-                        ? 'text-red-600 dark:text-red-400'
-                        : pct >= 80
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-zinc-700 dark:text-zinc-300'
-                    }`}
-                  >
-                    ${spent.toFixed(0)} <span className="font-normal text-zinc-400">/ ${b.monthlyLimit}</span>
-                  </span>
-                </div>
-
-                {/* Progress bar */}
-                <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isOver
-                        ? 'bg-red-500'
-                        : pct >= 80
-                        ? 'bg-amber-500'
-                        : 'bg-gradient-to-r from-brand-600 to-indigo-500'
-                    }`}
-                    style={{ width: `${Math.min(pct, 100)}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -676,6 +690,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
               <tr>
                 <th className="py-3 px-4 w-10">Status</th>
                 <th className="py-3 px-4">Date</th>
+                <th className="py-3 px-4">Account</th>
                 <th className="py-3 px-4">Clean Merchant</th>
                 <th className="py-3 px-4">Category</th>
                 <th className="py-3 px-4">Payment Method</th>
@@ -686,7 +701,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-zinc-400">
+                  <td colSpan={8} className="py-12 text-center text-zinc-400">
                     {transactions.length === 0
                       ? 'No transactions yet. Click "Import Statement" (PDF/CSV) or "Add Entry" to upload your data.'
                       : 'No transactions match your current filters.'}
@@ -716,6 +731,27 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
                     {/* Date */}
                     <td className="py-3 px-4 font-mono text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
                       {tx.date}
+                    </td>
+
+                    {/* Account Tag */}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {(() => {
+                        const acc = accounts.find((a) => a.id === tx.accountId) ||
+                          accounts.find((a) => a.name.toLowerCase() === (tx.accountName || '').toLowerCase());
+                        const color = acc?.color || '#a1a1aa';
+                        const name = acc?.name || tx.accountName || 'Primary';
+                        const type = acc?.type;
+
+                        return (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                            <span>{name}</span>
+                            {type && (
+                              <span className="text-[8px] uppercase opacity-70">({type})</span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </td>
 
                     {/* Merchant & Raw hover */}
@@ -796,13 +832,19 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         </div>
       </div>
 
-      {/* CSV Import Modal */}
+      {/* CSV / Statement Import Modal */}
       <CsvImportModal
         isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setImportTargetAccountId(undefined);
+        }}
         onImport={handleImportBatch}
         existingTransactions={transactions}
         categoryRules={categoryRules}
+        accounts={accounts}
+        defaultAccountId={importTargetAccountId}
+        defaultMonth={selectedMonth !== 'all' ? selectedMonth : undefined}
         onSaveRule={onSaveRule}
         onSaveRulesBatch={onSaveRulesBatch}
       />

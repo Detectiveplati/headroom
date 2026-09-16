@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { 
   X, 
   UploadCloud, 
@@ -16,7 +16,8 @@ import {
   ExpenseCategory, 
   CardMetaInfo, 
   CategorizedRuleResult,
-  TrackedAccount 
+  TrackedAccount,
+  AccountType
 } from '../../types';
 import { parseBankStatementCsv, getTransactionSignature } from '../../utils/csvParser';
 
@@ -92,12 +93,21 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     defaultMonth || new Date().toISOString().slice(0, 7)
   );
   const [customClosingBalance, setCustomClosingBalance] = useState<string>('');
+  const [accountTypeOverride, setAccountTypeOverride] = useState<AccountType | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (defaultAccountId) setSelectedAccountId(defaultAccountId);
     if (defaultMonth) setStatementMonth(defaultMonth);
   }, [defaultAccountId, defaultMonth, isOpen]);
+
+  const stagedTransactions = useMemo(
+    () =>
+      [...parsedTransactions].sort(
+        (a, b) => Number(b.category === 'Uncategorized') - Number(a.category === 'Uncategorized')
+      ),
+    [parsedTransactions]
+  );
 
   if (!isOpen) return null;
 
@@ -110,6 +120,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     if (rawText !== undefined) setCsvText(rawText);
     setParsedTransactions(transactions);
     setParsedMeta(meta);
+    setAccountTypeOverride(meta.accountType || null);
 
     if (meta.closingBalance !== undefined) {
       setCustomClosingBalance(String(meta.closingBalance));
@@ -267,9 +278,27 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   };
 
   const handleCategoryChange = (id: string, newCategory: ExpenseCategory) => {
+    const currentTransaction = parsedTransactions.find((tx) => tx.id === id);
+    if (!currentTransaction) return;
+
     setParsedTransactions((prev) =>
       prev.map((tx) => (tx.id === id ? { ...tx, category: newCategory } : tx))
     );
+
+    if (currentTransaction.category !== 'Uncategorized' || newCategory === 'Uncategorized') return;
+
+    // Keep a stable, literal merchant phrase so future statement imports match locally.
+    const rulePattern = (currentTransaction.cleanMerchant || currentTransaction.rawDescription)
+      .toUpperCase()
+      .replace(/\b\d{2}[A-Z]{3}\b|\b\d{4,}\b/g, ' ')
+      .replace(/[^A-Z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (rulePattern && onSaveRule) {
+      onSaveRule(rulePattern, newCategory);
+      setAiNotice(`Saved “${rulePattern}” as ${newCategory} for future imports.`);
+    }
   };
 
   const handleSelectAccountChange = (accountId: string) => {
@@ -284,6 +313,11 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     if (toImport.length === 0) return;
 
     const chosenAccount = accounts.find((a) => a.id === selectedAccountId);
+    const resolvedAccountType = parsedMeta.accountType || accountTypeOverride || chosenAccount?.type;
+    if (!resolvedAccountType) {
+      setErrorMessage('Choose whether this is a debit/savings or credit-card statement before importing.');
+      return;
+    }
     const enrichedTxs = toImport.map((tx) => ({
       ...tx,
       accountId: selectedAccountId || undefined,
@@ -294,7 +328,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
       ? parseFloat(customClosingBalance) 
       : parsedMeta.closingBalance;
 
-    onImport(enrichedTxs, parsedMeta, {
+    onImport(enrichedTxs, { ...parsedMeta, accountType: resolvedAccountType }, {
       accountId: selectedAccountId,
       month: statementMonth,
       closingBalance: !isNaN(Number(closingBal)) ? Number(closingBal) : undefined,
@@ -381,6 +415,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     setIsAiCategorizing(false);
     setAiNotice(null);
     setErrorMessage(null);
+    setAccountTypeOverride(null);
   };
 
   // Metrics on parsed batch
@@ -401,6 +436,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     .reduce((sum, t) => sum + t.amount, 0);
 
   const uncategorizedCount = parsedTransactions.filter((t) => t.category === 'Uncategorized').length;
+  const needsAccountTypeChoice = parsedTransactions.length > 0 && !parsedMeta.accountType && !accountTypeOverride;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -594,6 +630,46 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                   </div>
                 </div>
               )}
+
+              {needsAccountTypeChoice && (
+                <fieldset className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 text-xs">
+                  <legend className="px-1 text-amber-700 dark:text-amber-300 font-semibold">
+                    Statement type needed before import
+                  </legend>
+                  <p className="text-zinc-600 dark:text-zinc-400 mb-2.5">
+                    We could not reliably identify this statement. Is it from a debit/savings account or a credit card?
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition ${accountTypeOverride === 'debit' ? 'border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-200' : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'}`}>
+                      <input
+                        type="radio"
+                        name="statement-account-type"
+                        checked={accountTypeOverride === 'debit'}
+                        onChange={() => {
+                          setAccountTypeOverride('debit');
+                          setErrorMessage(null);
+                        }}
+                        className="text-brand-600 focus:ring-brand-500"
+                      />
+                      Debit / savings account
+                    </label>
+                    <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition ${accountTypeOverride === 'credit' ? 'border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-200' : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'}`}>
+                      <input
+                        type="radio"
+                        name="statement-account-type"
+                        checked={accountTypeOverride === 'credit'}
+                        onChange={() => {
+                          setAccountTypeOverride('credit');
+                          setErrorMessage(null);
+                        }}
+                        className="text-brand-600 focus:ring-brand-500"
+                      />
+                      Credit card statement
+                    </label>
+                  </div>
+                </fieldset>
+              )}
+
               {/* Multi-Account & Balance Sheet Reconciliation Target Bar */}
               <div className="p-3.5 rounded-xl bg-offwhite-subtle dark:bg-zinc-900/90 border border-zinc-300 dark:border-zinc-800 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -799,9 +875,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
-                    {parsedTransactions.map((tx) => {
+                    {stagedTransactions.map((tx) => {
                       const isDupe = duplicateIds.has(tx.id);
                       const isSelected = selectedTxIds.has(tx.id);
+                      const isUncategorized = tx.category === 'Uncategorized';
 
                       return (
                         <tr
@@ -809,7 +886,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                           onClick={() => toggleSelectTx(tx.id)}
                           className={`hover:bg-zinc-100/70 dark:hover:bg-zinc-800/40 cursor-pointer transition ${
                             !isSelected ? 'opacity-40' : ''
-                          } ${isDupe ? 'bg-amber-500/5' : ''}`}
+                          } ${isDupe ? 'bg-amber-500/5' : ''} ${isUncategorized ? 'bg-brand-500/5 ring-1 ring-inset ring-brand-500/20' : ''}`}
                         >
                           <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                             <input

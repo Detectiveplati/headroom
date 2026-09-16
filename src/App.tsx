@@ -10,7 +10,9 @@ import {
   Transaction, 
   CategoryBudget, 
   ExpenseCategory, 
-  CardMetaInfo 
+  CardMetaInfo,
+  TrackedAccount,
+  MonthlyAccountUpload
 } from './types';
 import { 
   loadStoredTasks, 
@@ -27,7 +29,11 @@ import {
   saveStoredCategoryRules,
   loadStoredCardMeta,
   saveStoredCardMeta,
-  DEFAULT_BUDGETS
+  DEFAULT_BUDGETS,
+  loadStoredAccounts,
+  saveStoredAccounts,
+  loadStoredUploadLogs,
+  saveStoredUploadLogs
 } from './utils/storage';
 import { soundManager } from './utils/audio';
 import { getMeApi, logoutApi } from './utils/auth';
@@ -62,6 +68,8 @@ export const App: React.FC = () => {
   const [budgets, setBudgets] = useState<CategoryBudget[]>(DEFAULT_BUDGETS);
   const [categoryRules, setCategoryRules] = useState<Record<string, ExpenseCategory>>({});
   const [cardMeta, setCardMeta] = useState<CardMetaInfo>({});
+  const [accounts, setAccounts] = useState<TrackedAccount[]>([]);
+  const [uploadLogs, setUploadLogs] = useState<MonthlyAccountUpload[]>([]);
 
   // Segregation & User state
   const [activeContext, setActiveContext] = useState<TaskContext | 'all'>('work');
@@ -123,6 +131,8 @@ export const App: React.FC = () => {
       setBudgets(DEFAULT_BUDGETS);
       setCategoryRules({});
       setCardMeta({});
+      setAccounts([]);
+      setUploadLogs([]);
       setFinanceOwnerId(null);
       return;
     }
@@ -131,6 +141,8 @@ export const App: React.FC = () => {
     setBudgets(loadStoredBudgets(currentUser.id));
     setCategoryRules(loadStoredCategoryRules(currentUser.id));
     setCardMeta(loadStoredCardMeta(currentUser.id));
+    setAccounts(loadStoredAccounts(currentUser.id));
+    setUploadLogs(loadStoredUploadLogs(currentUser.id));
     setFinanceOwnerId(currentUser.id);
   }, [currentUser]);
 
@@ -152,6 +164,18 @@ export const App: React.FC = () => {
       saveStoredCardMeta(currentUser.id, cardMeta);
     }
   }, [cardMeta, currentUser, financeOwnerId]);
+
+  useEffect(() => {
+    if (currentUser && financeOwnerId === currentUser.id) {
+      saveStoredAccounts(currentUser.id, accounts);
+    }
+  }, [accounts, currentUser, financeOwnerId]);
+
+  useEffect(() => {
+    if (currentUser && financeOwnerId === currentUser.id) {
+      saveStoredUploadLogs(currentUser.id, uploadLogs);
+    }
+  }, [uploadLogs, currentUser, financeOwnerId]);
 
   // Load server-persisted category rules and merge with local
   useEffect(() => {
@@ -685,6 +709,10 @@ export const App: React.FC = () => {
             onSaveRulesBatch={handleSaveRulesBatch}
             cardMeta={cardMeta}
             onUpdateCardMeta={setCardMeta}
+            accounts={accounts}
+            onUpdateAccounts={setAccounts}
+            uploadLogs={uploadLogs}
+            onUpdateUploadLogs={setUploadLogs}
           />
         )}
       </main>
