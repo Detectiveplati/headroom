@@ -29,8 +29,8 @@
    Never assume external JSON from `localStorage` or `/api/board` conforms to expectations. Always defensively check properties before invoking methods like `.map()`, `.filter()`, or `.trim()`.
 6. **NEVER trigger Web Audio errors:**
    Browser autoplay policies suspend the `AudioContext` until user interaction. Never call sound methods without verifying audio context state and respecting user mute preferences.
-7. **NEVER execute destructive git commands:**
-   Never run `git push`, `git reset --hard`, `rm -rf`, or force-overwrite branches.
+7. **NEVER execute destructive git commands without explicit user approval:**
+   Never run `git reset --hard`, `rm -rf`, or force-overwrite branches. Running `git push` is only permitted after explicitly asking for and receiving the user's approval.
 
 ---
 
