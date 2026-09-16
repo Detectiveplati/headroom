@@ -125,7 +125,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
   const isWipAtCapacity = wipCount >= settings.wipLimit;
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-[#0d0f16]/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800/80 shadow-md dark:shadow-2xl transition-all pt-[max(0.5rem,env(safe-area-inset-top))]">
+    <header className="sticky top-0 z-40 w-full bg-offwhite-surface/95 dark:bg-[#0d0f16]/90 backdrop-blur-md border-b border-zinc-300/80 dark:border-zinc-800/80 shadow-sm dark:shadow-2xl transition-all pt-[max(0.5rem,env(safe-area-inset-top))]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-col md:flex-row items-center justify-between gap-3">
         
         {/* Left: Brand, Context Switcher, & WIP status */}
@@ -135,19 +135,19 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <span className="text-sm font-semibold tracking-wide text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <span className="text-sm font-semibold tracking-wide text-zinc-800 dark:text-zinc-100 flex items-center gap-1.5">
                 Headroom
-                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-brand-500/15 text-brand-600 dark:text-brand-300 border border-brand-500/30">
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-brand-500/15 text-brand-700 dark:text-brand-300 border border-brand-500/30">
                   v1.2
                 </span>
               </span>
             </div>
           </div>
 
-          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
+          <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800 hidden sm:block" />
 
           {/* Context Switcher: Work vs Personal vs All */}
-          <div className="flex items-center bg-zinc-100 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800 p-0.5 rounded-xl text-xs font-medium">
+          <div className="flex items-center bg-offwhite-subtle dark:bg-zinc-900/90 border border-zinc-300/70 dark:border-zinc-800 p-0.5 rounded-xl text-xs font-medium">
             <button
               onClick={() => onSelectContext('work')}
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition text-[11px] ${
@@ -189,13 +189,13 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
           <div 
             className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-colors ${
               isWipAtCapacity
-                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/30'
-                : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700/50'
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
+                : 'bg-offwhite-subtle dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 border-zinc-300/70 dark:border-zinc-700/50'
             }`}
             title={`WIP Limit: ${wipCount} of ${settings.wipLimit} active slots used.`}
           >
-            {isWipAtCapacity && <AlertTriangle className="w-3 h-3 text-amber-500 dark:text-amber-400" />}
-            <span className="text-zinc-400 text-[10px]">WIP:</span>
+            {isWipAtCapacity && <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+            <span className="text-zinc-500 text-[10px]">WIP:</span>
             <span className="font-mono font-semibold">{wipCount}/{settings.wipLimit}</span>
           </div>
 
@@ -205,16 +205,16 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             onClick={onOpenSyncModal}
             className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-all ${
               syncStatus === 'synced'
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/35 hover:bg-emerald-500/25'
                 : syncStatus === 'syncing'
-                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
-                : 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/60'
+                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/35 hover:bg-amber-500/25'
+                : 'bg-offwhite-subtle dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 border-zinc-300/70 dark:border-zinc-700/60'
             }`}
             title={`Cloud Sync: ${syncStatus}. Click to manage private board key or sync.`}
           >
-            {syncStatus === 'synced' && <Cloud className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />}
-            {syncStatus === 'syncing' && <RefreshCw className="w-3 h-3 text-amber-500 dark:text-amber-400 animate-spin" />}
-            {syncStatus !== 'synced' && syncStatus !== 'syncing' && <CloudOff className="w-3 h-3 text-zinc-400" />}
+            {syncStatus === 'synced' && <Cloud className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+            {syncStatus === 'syncing' && <RefreshCw className="w-3 h-3 text-amber-600 dark:text-amber-400 animate-spin" />}
+            {syncStatus !== 'synced' && syncStatus !== 'syncing' && <CloudOff className="w-3 h-3 text-zinc-500" />}
             <span className="hidden lg:inline font-mono text-[10px] capitalize">{syncStatus}</span>
           </button>
         </div>
@@ -222,7 +222,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
         {/* Center: Primary Focus HUD */}
         <div className="flex-1 w-full md:w-auto flex items-center justify-center">
           {activeTask ? (
-            <div className="flex items-center gap-3 bg-zinc-50 dark:bg-zinc-900/90 border border-brand-500/40 px-3.5 py-1.5 rounded-xl shadow-lg shadow-brand-500/10 max-w-2xl w-full justify-between animate-fadeIn">
+            <div className="flex items-center gap-3 bg-offwhite-card dark:bg-zinc-900/90 border border-brand-500/40 px-3.5 py-1.5 rounded-xl shadow-md shadow-brand-500/10 max-w-2xl w-full justify-between animate-fadeIn">
               <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
                 <div className="relative flex items-center justify-center shrink-0">
                   <span className="flex h-2.5 w-2.5 relative">
@@ -244,7 +244,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
                 </button>
 
                 {totalSubtasks > 0 && (
-                  <span className="hidden sm:inline-flex text-[10px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-200 dark:bg-zinc-800/80 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700/50 whitespace-nowrap">
+                  <span className="hidden sm:inline-flex text-[10px] font-mono text-zinc-600 dark:text-zinc-400 bg-offwhite-subtle dark:bg-zinc-800/80 px-2 py-0.5 rounded border border-zinc-300/80 dark:border-zinc-700/50 whitespace-nowrap">
                     {completedSubtasks}/{totalSubtasks}
                   </span>
                 )}
@@ -258,7 +258,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
                         className={`text-[9px] px-1.5 py-0.5 rounded font-mono transition ${
                           t.id === activeTask.id
                             ? 'bg-brand-500/30 text-brand-700 dark:text-brand-200 border border-brand-400/40 font-bold'
-                            : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 bg-zinc-200/60 dark:bg-zinc-800/40'
+                            : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 bg-offwhite-subtle dark:bg-zinc-800/40'
                         }`}
                         title={`Switch focus to: ${t.title}`}
                       >
@@ -271,25 +271,25 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
 
               {/* Timer Controls & Quick Complete */}
               <div className="flex items-center gap-2 shrink-0">
-                <div className="flex items-center gap-1 bg-white dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg">
-                  <Clock className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400" />
+                <div className="flex items-center gap-1 bg-offwhite-subtle dark:bg-zinc-950/70 border border-zinc-300/80 dark:border-zinc-800 px-2 py-1 rounded-lg">
+                  <Clock className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
                   <span className="font-mono text-xs sm:text-sm font-medium text-brand-700 dark:text-brand-200 min-w-[45px] text-center">
                     {formatTime(displaySeconds)}
                   </span>
                   <button
                     onClick={() => onToggleTimer(activeTask.id)}
-                    className="p-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                    className="p-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded hover:bg-offwhite-surface dark:hover:bg-zinc-800 transition"
                     title={activeTask.isRunning ? "Pause timer" : "Start timer"}
                   >
                     {activeTask.isRunning ? (
                       <Pause className="w-3 h-3 text-amber-500" />
                     ) : (
-                      <Play className="w-3 h-3 text-emerald-500 fill-emerald-500" />
+                      <Play className="w-3 h-3 text-emerald-600 fill-emerald-600 dark:text-emerald-500 dark:fill-emerald-500" />
                     )}
                   </button>
                   <button
                     onClick={() => onResetTimer(activeTask.id)}
-                    className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                    className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 rounded hover:bg-offwhite-surface dark:hover:bg-zinc-800 transition"
                     title="Reset timer"
                   >
                     <RotateCcw className="w-3 h-3" />
@@ -307,7 +307,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-1.5 px-4 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs w-full max-w-lg bg-zinc-50 dark:bg-zinc-900/40">
+            <div className="flex items-center justify-center gap-2 py-1.5 px-4 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs w-full max-w-lg bg-offwhite-surface/70 dark:bg-zinc-900/40">
               <span>No active focus task in this view.</span>
               <span className="font-medium text-zinc-800 dark:text-zinc-200">Drag a card into "In Progress"</span>
             </div>
@@ -318,8 +318,8 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
         <div className="flex items-center gap-1.5 w-full md:w-auto justify-end">
           {/* User Account / Sign In */}
           {currentUser ? (
-            <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded-lg text-xs font-mono">
-              <span className="text-brand-600 dark:text-brand-400 font-semibold">{currentUser.username}</span>
+            <div className="flex items-center gap-1 bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-300/70 dark:border-zinc-800 px-2 py-1 rounded-lg text-xs font-mono">
+              <span className="text-brand-700 dark:text-brand-400 font-semibold">{currentUser.username}</span>
               <button
                 onClick={onLogout}
                 className="p-1 text-zinc-400 hover:text-red-500 transition"
@@ -331,10 +331,10 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
           ) : (
             <button
               onClick={onOpenAuthModal}
-              className="flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-brand-500 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2.5 py-1.5 rounded-lg transition"
+              className="flex items-center gap-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:text-brand-600 bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-300/70 dark:border-zinc-800 px-2.5 py-1.5 rounded-lg transition"
               title="Sign In or Create an Account"
             >
-              <UserIcon className="w-3.5 h-3.5 text-brand-500" />
+              <UserIcon className="w-3.5 h-3.5 text-brand-600 dark:text-brand-500" />
               <span className="hidden sm:inline">Sign In</span>
             </button>
           )}
@@ -342,12 +342,12 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
           {/* Theme Toggle (System / Dark / Light) */}
           <button
             onClick={handleCycleTheme}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:border-brand-500 transition"
+            className="p-1.5 rounded-lg border border-zinc-300/70 dark:border-zinc-800 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-brand-500 transition"
             title={`Current theme: ${settings.theme || 'system'}. Click to cycle (System -> Dark -> Light).`}
           >
             {(settings.theme || 'system') === 'system' && <Monitor className="w-3.5 h-3.5" />}
             {settings.theme === 'dark' && <Moon className="w-3.5 h-3.5" />}
-            {settings.theme === 'light' && <Sun className="w-3.5 h-3.5" />}
+            {settings.theme === 'light' && <Sun className="w-3.5 h-3.5 text-amber-600" />}
           </button>
 
           {/* Quick Add */}
@@ -365,8 +365,8 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             onClick={() => onUpdateSettings({ soundEnabled: !settings.soundEnabled })}
             className={`p-1.5 rounded-lg border transition ${
               settings.soundEnabled 
-                ? 'bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700/70 text-zinc-700 dark:text-zinc-300' 
-                : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400'
+                ? 'bg-offwhite-subtle dark:bg-zinc-800/80 border-zinc-300/70 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-300' 
+                : 'bg-offwhite-surface dark:bg-zinc-900 border-zinc-300/70 dark:border-zinc-800 text-zinc-400'
             }`}
             title={settings.soundEnabled ? "Mute sound effects" : "Enable sound effects"}
           >
@@ -376,7 +376,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
           {/* Backup Modal */}
           <button
             onClick={onOpenBackupModal}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition"
+            className="p-1.5 rounded-lg border border-zinc-300/70 dark:border-zinc-800 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition"
             title="Export / Import JSON Data"
           >
             <FileDown className="w-3.5 h-3.5" />
@@ -385,7 +385,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
           {/* Keyboard Shortcuts */}
           <button
             onClick={onOpenShortcutsModal}
-            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition"
+            className="p-1.5 rounded-lg border border-zinc-300/70 dark:border-zinc-800 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition"
             title="Keyboard shortcuts (?)"
           >
             <Keyboard className="w-3.5 h-3.5" />

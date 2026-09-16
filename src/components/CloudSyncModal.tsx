@@ -49,9 +49,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-white dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col text-zinc-900 dark:text-zinc-100">
+      <div className="bg-offwhite-surface dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col text-zinc-900 dark:text-zinc-100">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-950/40">
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-offwhite-subtle/60 dark:bg-zinc-950/40">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-600 dark:text-brand-400">
               <Cloud className="w-4 h-4" />
@@ -62,7 +62,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-lg hover:bg-offwhite-subtle dark:hover:bg-zinc-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -71,7 +71,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
         {/* Body */}
         <div className="p-5 text-xs text-zinc-600 dark:text-zinc-300 space-y-4">
           {/* Status Banner */}
-          <div className="p-3 rounded-xl bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+          <div className="p-3 rounded-xl bg-offwhite-subtle/60 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {syncStatus === 'synced' ? (
                 <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
@@ -127,7 +127,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 placeholder="e.g. zack-focus or default"
                 value={boardKeyInput}
                 onChange={(e) => setBoardKeyInput(e.target.value)}
-                className="flex-1 text-xs font-mono bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                className="flex-1 text-xs font-mono bg-offwhite-input dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
               />
               <button
                 type="submit"
@@ -149,7 +149,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
               <button
                 type="button"
                 onClick={onForcePull}
-                className="flex items-center justify-center gap-1.5 bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 py-2 px-3 rounded-xl transition"
+                className="flex items-center justify-center gap-1.5 bg-offwhite-card hover:bg-offwhite-subtle dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 py-2 px-3 rounded-xl transition shadow-xs"
                 title="Fetch the latest board from cloud and update local board"
               >
                 <CloudDownload className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
@@ -159,7 +159,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
               <button
                 type="button"
                 onClick={onForcePush}
-                className="flex items-center justify-center gap-1.5 bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 py-2 px-3 rounded-xl transition"
+                className="flex items-center justify-center gap-1.5 bg-offwhite-card hover:bg-offwhite-subtle dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 py-2 px-3 rounded-xl transition shadow-xs"
                 title="Force local board state to overwrite cloud"
               >
                 <CloudUpload className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
@@ -168,7 +168,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             </div>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-zinc-100/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 flex items-start gap-2 text-[11px] text-zinc-600 dark:text-zinc-400">
+          <div className="p-2.5 rounded-lg bg-offwhite-subtle/50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 flex items-start gap-2 text-[11px] text-zinc-600 dark:text-zinc-400">
             <ShieldCheck className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
             <span>
               <strong>Local-First:</strong> You can continue working even when disconnected. Changes queue locally and automatically sync the moment connection returns.
@@ -177,7 +177,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 flex justify-end">
+        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-offwhite-subtle/60 dark:bg-zinc-950/60 flex justify-end">
           <button
             onClick={onClose}
             className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium px-4 py-1.5 rounded-xl transition"

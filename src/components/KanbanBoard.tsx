@@ -143,7 +143,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   return (
     <div className="flex-1 flex flex-col max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4">
       {/* Search & Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white/80 dark:bg-zinc-900/40 p-2.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 backdrop-blur-sm shadow-sm dark:shadow-none">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-offwhite-surface/90 dark:bg-zinc-900/40 p-2.5 rounded-2xl border border-zinc-300/80 dark:border-zinc-800/80 backdrop-blur-sm shadow-sm dark:shadow-none">
         <div className="flex items-center gap-2 flex-1 min-w-[220px]">
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -152,7 +152,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               placeholder="Filter tasks by name, notes, or tags..."
               value={filter.search}
               onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-100/80 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80 rounded-xl text-zinc-900 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-offwhite-input dark:bg-zinc-950/60 border border-zinc-300/70 dark:border-zinc-800/80 rounded-xl text-zinc-800 dark:text-zinc-200 placeholder-zinc-500 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
             {filter.search && (
               <button
@@ -174,8 +174,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onClick={() => setFilter((f) => ({ ...f, priority: p }))}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-mono capitalize transition ${
                 filter.priority === p
-                  ? 'bg-brand-500/20 text-brand-600 dark:text-brand-300 border border-brand-500/40 font-semibold'
-                  : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
+                  ? 'bg-brand-500/20 text-brand-700 dark:text-brand-300 border border-brand-500/40 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-offwhite-subtle dark:hover:bg-zinc-800/60'
               }`}
             >
               {p}
@@ -189,7 +189,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             <select
               value={filter.tag}
               onChange={(e) => setFilter((f) => ({ ...f, tag: e.target.value }))}
-              className="text-xs bg-zinc-100/80 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80 rounded-lg px-2.5 py-1 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="text-xs bg-offwhite-input dark:bg-zinc-950/60 border border-zinc-300/70 dark:border-zinc-800/80 rounded-lg px-2.5 py-1 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option value="all">All Tags</option>
               {allTags.map((tag) => (

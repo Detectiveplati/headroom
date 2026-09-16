@@ -123,11 +123,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div 
-        className="bg-white dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-zinc-900 dark:text-zinc-100"
+        className="bg-offwhite-surface dark:bg-[#12151e] border border-zinc-300/80 dark:border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-zinc-800 dark:text-zinc-100"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-950/40">
+        <div className="px-5 py-4 border-b border-zinc-300/70 dark:border-zinc-800 flex items-center justify-between bg-offwhite-subtle/70 dark:bg-zinc-950/40">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-600 dark:text-brand-400">
               <Sparkles className="w-4 h-4" />
@@ -138,7 +138,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-offwhite-subtle dark:hover:bg-zinc-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -158,7 +158,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               placeholder="e.g. Prepare client onboarding deck"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full text-xs sm:text-sm bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition"
+              className="w-full text-xs sm:text-sm bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition"
             />
           </div>
 
@@ -174,7 +174,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-medium border transition ${
                   context === 'work'
                     ? 'bg-blue-500/15 border-blue-500 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/40'
-                    : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                    : 'bg-offwhite-subtle dark:bg-zinc-900/60 border-zinc-300/70 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
                 }`}
               >
                 <Briefcase className="w-4 h-4 text-blue-500" />
@@ -187,7 +187,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-medium border transition ${
                   context === 'personal'
                     ? 'bg-pink-500/15 border-pink-500 text-pink-700 dark:text-pink-300 ring-1 ring-pink-500/40'
-                    : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                    : 'bg-offwhite-subtle dark:bg-zinc-900/60 border-zinc-300/70 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
                 }`}
               >
                 <Home className="w-4 h-4 text-pink-500" />
@@ -205,7 +205,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <select
                 value={columnId}
                 onChange={(e) => setColumnId(e.target.value as ColumnId)}
-                className="w-full text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
+                className="w-full text-xs bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-xl px-3 py-2 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-brand-500/50"
               >
                 <option value="backlog">Brain Dump (Backlog)</option>
                 <option value="today">To Do Today</option>
@@ -235,7 +235,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             : p === 'medium'
                             ? 'bg-blue-500/20 text-blue-600 dark:text-blue-300 border-blue-500/50 ring-1 ring-blue-500/40'
                             : 'bg-zinc-200 dark:bg-zinc-700/40 text-zinc-800 dark:text-zinc-200 border-zinc-400 ring-1 ring-zinc-500/40'
-                          : 'bg-zinc-100 dark:bg-zinc-900/80 text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:text-zinc-800'
+                          : 'bg-offwhite-subtle dark:bg-zinc-900/80 text-zinc-600 border-zinc-300/70 dark:border-zinc-800 hover:text-zinc-900'
                       }`}
                     >
                       {p}
@@ -256,7 +256,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               placeholder="What specifically does success look like?"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-xl p-3 text-zinc-900 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition leading-relaxed"
+              className="w-full text-xs bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-xl p-3 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition leading-relaxed"
             />
           </div>
 
@@ -277,14 +277,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               {subtasks.map((st) => (
                 <div
                   key={st.id}
-                  className="flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800/80 text-xs group"
+                  className="flex items-center justify-between gap-2 p-2 rounded-lg bg-offwhite-card dark:bg-zinc-900/90 border border-zinc-300/70 dark:border-zinc-800/80 text-xs group"
                 >
                   <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
                     <input
                       type="checkbox"
                       checked={st.completed}
                       onChange={() => handleToggleSubtask(st.id)}
-                      className="rounded border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-brand-600 focus:ring-0 h-3.5 w-3.5 cursor-pointer"
+                      className="rounded border-zinc-300 dark:border-zinc-700 bg-offwhite-input dark:bg-zinc-950 text-brand-600 focus:ring-0 h-3.5 w-3.5 cursor-pointer"
                     />
                     <span className={`truncate ${st.completed ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-800 dark:text-zinc-200'}`}>
                       {st.title}
@@ -314,12 +314,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     handleAddSubtask();
                   }
                 }}
-                className="flex-1 text-xs bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-300 dark:border-zinc-700/60 rounded-lg px-3 py-1.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="flex-1 text-xs bg-offwhite-input dark:bg-zinc-900/60 border border-zinc-300/80 dark:border-zinc-700/60 rounded-lg px-3 py-1.5 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
               <button
                 type="button"
                 onClick={() => handleAddSubtask()}
-                className="text-xs bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-medium"
+                className="text-xs bg-offwhite-subtle dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-medium"
               >
                 <Plus className="w-3 h-3" />
                 <span>Add</span>
@@ -338,7 +338,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 {tags.map((t) => (
                   <span
                     key={t}
-                    className="inline-flex items-center gap-1 text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700/60 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded-full"
+                    className="inline-flex items-center gap-1 text-[10px] font-mono bg-offwhite-subtle dark:bg-zinc-800 border border-zinc-300/70 dark:border-zinc-700/60 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded-full"
                   >
                     #{t}
                     <button
@@ -357,7 +357,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleAddTag}
-                className="w-full text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full text-xs bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
 
@@ -370,18 +370,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-900 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full text-xs bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
         </form>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-zinc-300/70 dark:border-zinc-800 bg-offwhite-subtle/70 dark:bg-zinc-950/60 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 px-4 py-2 rounded-xl hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 transition"
+            className="text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 px-4 py-2 rounded-xl hover:bg-offwhite-subtle dark:hover:bg-zinc-800/80 transition"
           >
             Cancel
           </button>

@@ -14,7 +14,7 @@
   }
 
   body {
-    @apply bg-slate-50 dark:bg-[#090a0f] text-zinc-900 dark:text-zinc-100 selection:bg-brand-500/30 selection:text-brand-600 dark:selection:text-brand-200 overflow-x-hidden min-h-screen;
+    @apply bg-offwhite-bg dark:bg-[#090a0f] text-zinc-800 dark:text-zinc-100 selection:bg-brand-500/30 selection:text-brand-600 dark:selection:text-brand-200 overflow-x-hidden min-h-screen;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     
     /* iOS notch & home bar safe-area padding */
@@ -40,7 +40,7 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: rgba(15, 17, 23, 0.1);
+    background: rgba(15, 17, 23, 0.06);
   }
 
   .dark ::-webkit-scrollbar-track {
@@ -67,7 +67,7 @@
 
 /* Glassmorphism helpers for Light & Dark modes */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(244, 245, 248, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -79,10 +79,10 @@
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(252, 253, 254, 0.98);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 .dark .glass-card {

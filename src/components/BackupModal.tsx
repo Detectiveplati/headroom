@@ -71,11 +71,11 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-white dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col text-zinc-900 dark:text-zinc-100">
+      <div className="bg-offwhite-surface dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col text-zinc-900 dark:text-zinc-100">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-950/40">
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-offwhite-subtle/60 dark:bg-zinc-950/40">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300">
+            <div className="h-7 w-7 rounded-lg bg-offwhite-card dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300 shadow-xs">
               <FileText className="w-4 h-4" />
             </div>
             <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
@@ -84,14 +84,14 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-lg hover:bg-offwhite-subtle dark:hover:bg-zinc-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Controls */}
-        <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/60 dark:bg-zinc-950/20 text-xs">
+        <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-offwhite-subtle/40 dark:bg-zinc-950/20 text-xs">
           <button
             onClick={() => { setActiveTab('export'); setErrorMsg(null); }}
             className={`flex-1 py-2.5 font-medium border-b-2 transition ${
@@ -133,7 +133,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
                 <button
                   onClick={handleCopy}
-                  className="flex items-center justify-center gap-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-medium py-2.5 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 transition"
+                  className="flex items-center justify-center gap-2 bg-offwhite-card hover:bg-offwhite-subtle dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-medium py-2.5 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 transition shadow-xs"
                 >
                   {copied ? <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   <span>{copied ? 'Copied!' : 'Copy to Clipboard'}</span>
@@ -184,7 +184,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   placeholder='{"tasks": [...]}'
                   value={pastedJson}
                   onChange={(e) => setPastedJson(e.target.value)}
-                  className="w-full text-xs font-mono bg-zinc-50 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-xl p-2.5 text-zinc-900 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="w-full text-xs font-mono bg-offwhite-input dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-xl p-2.5 text-zinc-900 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
               </div>
 
@@ -201,10 +201,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 flex justify-end">
+        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-offwhite-subtle/60 dark:bg-zinc-950/60 flex justify-end">
           <button
             onClick={onClose}
-            className="text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white px-4 py-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            className="text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white px-4 py-1.5 rounded-lg hover:bg-offwhite-subtle dark:hover:bg-zinc-800 transition"
           >
             Close
           </button>

@@ -20,6 +20,14 @@ export default {
           800: '#303582',
           900: '#2b2f6b',
         },
+        offwhite: {
+          bg: '#ebeef2',        // Base canvas background (anti-glare matte off-white)
+          surface: '#f4f5f8',   // Header HUD, columns, filter bars
+          card: '#fcfdfe',      // Task card surface
+          subtle: '#e1e5eb',    // Badges, pill backgrounds, borders
+          input: '#eaedf2',     // Text inputs and textarea fields
+          muted: '#717684',     // Subdued text color for secondary labels
+        },
         surface: {
           DEFAULT: '#0f1117',
           elevated: '#161922',

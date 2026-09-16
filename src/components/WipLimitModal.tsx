@@ -27,7 +27,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-white dark:bg-[#13151f] border border-amber-500/40 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden ring-1 ring-amber-500/30 text-zinc-900 dark:text-zinc-100">
+      <div className="bg-offwhite-surface dark:bg-[#13151f] border border-amber-500/40 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden ring-1 ring-amber-500/30 text-zinc-900 dark:text-zinc-100">
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-amber-500/10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -45,7 +45,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            className="text-zinc-400 hover:text-zinc-700 dark:hover:text-white p-1 rounded-lg hover:bg-offwhite-subtle dark:hover:bg-zinc-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -57,14 +57,14 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
             You are attempting to bring <span className="font-semibold text-zinc-900 dark:text-white">"{pendingTask.title}"</span> into <span className="text-amber-600 dark:text-amber-300 font-mono">In Progress</span>, but you already have <span className="font-semibold text-amber-600 dark:text-amber-300">{wipLimit} active tasks</span>.
           </p>
 
-          <div className="bg-zinc-100/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 space-y-2">
+          <div className="bg-offwhite-subtle/50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 space-y-2">
             <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">
               Currently in your focus lane:
             </span>
             {doingTasks.map((t) => (
               <div
                 key={t.id}
-                className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white dark:bg-zinc-950/70 border border-zinc-200 dark:border-zinc-800/80"
+                className="flex items-center justify-between gap-2 p-2 rounded-lg bg-offwhite-card dark:bg-zinc-950/70 border border-zinc-200/90 dark:border-zinc-800/80 shadow-xs"
               >
                 <div className="truncate flex-1">
                   <p className="font-medium text-zinc-900 dark:text-zinc-100 truncate">{t.title}</p>
@@ -79,7 +79,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
                       onMoveBackToToday(t.id);
                       onForceProceed(pendingTask);
                     }}
-                    className="flex items-center gap-1 text-[10px] font-medium bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 px-2 py-1 rounded transition"
+                    className="flex items-center gap-1 text-[10px] font-medium bg-offwhite-subtle hover:bg-zinc-300/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 px-2 py-1 rounded transition"
                     title="Move back to 'To Do Today' to free up this focus slot"
                   >
                     <ArrowLeft className="w-3 h-3" />
@@ -110,7 +110,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 flex items-center justify-between text-xs">
+        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-offwhite-subtle/60 dark:bg-zinc-950/60 flex items-center justify-between text-xs">
           <button
             onClick={() => onForceProceed(pendingTask)}
             className="text-[11px] text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 underline transition"

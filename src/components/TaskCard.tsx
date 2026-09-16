@@ -63,7 +63,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       case 'medium':
         return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
       default:
-        return 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/50';
+        return 'bg-offwhite-subtle dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300/70 dark:border-zinc-700/50';
     }
   };
 
@@ -80,8 +80,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       onDragStart={(e) => onDragStart(e, task.id)}
       className={`group relative rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing border select-none ${
         isFocused
-          ? 'bg-white dark:bg-zinc-900/95 border-brand-500/70 shadow-lg shadow-brand-500/15 ring-1 ring-brand-500/40'
-          : 'bg-white dark:bg-[#151821]/80 hover:bg-slate-50 dark:hover:bg-[#1a1e2a] border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm dark:shadow-md'
+          ? 'bg-offwhite-card dark:bg-zinc-900/95 border-brand-500/70 shadow-md shadow-brand-500/15 ring-1 ring-brand-500/40'
+          : 'bg-offwhite-card dark:bg-[#151821]/80 hover:bg-offwhite-card dark:hover:bg-[#1a1e2a] border-zinc-300/70 dark:border-zinc-800/80 hover:border-zinc-400/90 dark:hover:border-zinc-700 shadow-xs hover:shadow-md'
       }`}
     >
       <div className="p-3.5 space-y-2.5">
@@ -123,7 +123,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onFocusTask(task.id);
                 }}
-                className="text-[10px] font-mono text-brand-300 hover:text-brand-200 bg-brand-500/20 hover:bg-brand-500/30 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
+                className="text-[10px] font-mono text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:hover:text-brand-200 bg-brand-500/15 hover:bg-brand-500/25 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
                 title="Pin as primary active HUD task"
               >
                 Set Focus
@@ -135,7 +135,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 e.stopPropagation();
                 onEdit(task);
               }}
-              className="p-1 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80 rounded transition"
+              className="p-1 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-offwhite-subtle dark:hover:bg-zinc-800/80 rounded transition"
               title="Edit task"
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -145,7 +145,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 e.stopPropagation();
                 onDelete(task.id);
               }}
-              className="p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-800/80 rounded transition"
+              className="p-1 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-offwhite-subtle dark:hover:bg-zinc-800/80 rounded transition"
               title="Delete task"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -156,8 +156,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {/* Title */}
         <h4 
           onClick={() => onEdit(task)}
-          className={`text-sm font-medium leading-snug cursor-pointer hover:text-brand-500 dark:hover:text-brand-300 transition line-clamp-2 ${
-            task.columnId === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
+          className={`text-sm font-medium leading-snug cursor-pointer hover:text-brand-600 dark:hover:text-brand-300 transition line-clamp-2 ${
+            task.columnId === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-800 dark:text-zinc-100'
           }`}
         >
           {task.title}
@@ -218,9 +218,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                       type="checkbox"
                       checked={st.completed}
                       onChange={() => onToggleSubtask(task.id, st.id)}
-                      className="mt-0.5 rounded border-zinc-700 bg-zinc-900 text-brand-500 focus:ring-brand-500 focus:ring-offset-zinc-900 h-3.5 w-3.5 cursor-pointer"
+                      className="mt-0.5 rounded border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-brand-600 focus:ring-brand-500 h-3.5 w-3.5 cursor-pointer"
                     />
-                    <span className={`flex-1 transition leading-tight ${st.completed ? 'line-through text-zinc-500' : ''}`}>
+                    <span className={`flex-1 transition leading-tight ${st.completed ? 'line-through text-zinc-400 dark:text-zinc-500' : ''}`}>
                       {st.title}
                     </span>
                   </label>
@@ -236,7 +236,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.tags.map((tag, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-400 bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-700/40"
+                className="inline-flex items-center gap-1 text-[10px] font-mono text-zinc-600 dark:text-zinc-400 bg-offwhite-subtle dark:bg-zinc-800/60 px-1.5 py-0.5 rounded border border-zinc-300/70 dark:border-zinc-700/40"
               >
                 <Tag className="w-2.5 h-2.5 text-zinc-500" />
                 {tag}
@@ -246,7 +246,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {/* Card Footer: Timer info & Quick Move navigation */}
-        <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800/60 text-xs text-zinc-500">
+        <div className="flex items-center justify-between pt-2 border-t border-zinc-300/60 dark:border-zinc-800/60 text-xs text-zinc-500">
           <div className="flex items-center gap-2">
             {task.columnId === 'doing' && onToggleTimer && (
               <button
@@ -255,23 +255,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onToggleTimer(task.id);
                 }}
-                className="flex items-center gap-1 font-mono text-[11px] text-brand-600 dark:text-brand-300 hover:text-brand-800 dark:hover:text-white bg-brand-500/15 hover:bg-brand-500/25 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
+                className="flex items-center gap-1 font-mono text-[11px] text-brand-700 dark:text-brand-300 hover:text-brand-900 dark:hover:text-white bg-brand-500/15 hover:bg-brand-500/25 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
                 title={task.isRunning ? "Pause timer" : "Start timer"}
               >
-                {task.isRunning ? <Pause className="w-2.5 h-2.5 text-amber-500" /> : <Play className="w-2.5 h-2.5 text-emerald-500 fill-emerald-500" />}
+                {task.isRunning ? <Pause className="w-2.5 h-2.5 text-amber-500" /> : <Play className="w-2.5 h-2.5 text-emerald-600 fill-emerald-600 dark:text-emerald-500 dark:fill-emerald-500" />}
                 <span>{formatElapsed(task.elapsedSeconds)}</span>
               </button>
             )}
 
             {task.columnId !== 'doing' && task.elapsedSeconds > 0 && (
-              <span className="flex items-center gap-1 font-mono text-[11px] text-brand-300/90" title="Focus time logged">
+              <span className="flex items-center gap-1 font-mono text-[11px] text-brand-600 dark:text-brand-300/90" title="Focus time logged">
                 <Clock className="w-3 h-3" />
                 {formatElapsed(task.elapsedSeconds)}
               </span>
             )}
 
             {task.dueDate && (
-              <span className="flex items-center gap-1 font-mono text-[10px] text-zinc-400">
+              <span className="flex items-center gap-1 font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
                 <Calendar className="w-3 h-3" />
                 {task.dueDate}
               </span>
@@ -286,7 +286,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onMove(task.id, prevCol);
                 }}
-                className="p-1 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 rounded transition"
+                className="p-1 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-offwhite-subtle dark:hover:bg-zinc-800 rounded transition"
                 title={`Move to previous column`}
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -298,10 +298,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onMove(task.id, nextCol);
                 }}
-                className="p-1 text-zinc-500 hover:text-brand-300 hover:bg-zinc-800 rounded transition flex items-center gap-0.5"
+                className="p-1 text-zinc-400 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-offwhite-subtle dark:hover:bg-zinc-800 rounded transition flex items-center gap-0.5"
                 title={`Advance to next column`}
               >
-                {nextCol === 'done' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                {nextCol === 'done' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
             )}
           </div>

@@ -11,9 +11,9 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="bg-white dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col text-zinc-900 dark:text-zinc-100">
+      <div className="bg-offwhite-surface dark:bg-[#12151e] border border-zinc-200 dark:border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col text-zinc-900 dark:text-zinc-100">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-950/40">
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-offwhite-subtle/60 dark:bg-zinc-950/40">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-brand-500/20 border border-brand-500/30 flex items-center justify-center text-brand-600 dark:text-brand-400">
               <Keyboard className="w-4 h-4" />
@@ -24,7 +24,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+            className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-white rounded-lg hover:bg-offwhite-subtle dark:hover:bg-zinc-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -37,22 +37,22 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
             <h4 className="font-semibold text-zinc-700 dark:text-zinc-200 text-xs mb-2 uppercase tracking-wider font-mono">
               Keyboard Shortcuts
             </h4>
-            <div className="space-y-1.5 bg-zinc-100/80 dark:bg-zinc-900/80 rounded-xl p-3 border border-zinc-200 dark:border-zinc-800">
+            <div className="space-y-1.5 bg-offwhite-subtle/50 dark:bg-zinc-900/80 rounded-xl p-3 border border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center justify-between py-1 border-b border-zinc-200/80 dark:border-zinc-800/60">
                 <span className="text-zinc-700 dark:text-zinc-300">Quick capture new task</span>
-                <kbd className="font-mono bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-sm dark:shadow-none">
+                <kbd className="font-mono bg-offwhite-card dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-xs dark:shadow-none">
                   Ctrl + K &nbsp;or&nbsp; N
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-zinc-200/80 dark:border-zinc-800/60">
                 <span className="text-zinc-700 dark:text-zinc-300">Close modal / Cancel input</span>
-                <kbd className="font-mono bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-sm dark:shadow-none">
+                <kbd className="font-mono bg-offwhite-card dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-xs dark:shadow-none">
                   Escape
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1">
                 <span className="text-zinc-700 dark:text-zinc-300">Open this cheat sheet</span>
-                <kbd className="font-mono bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-sm dark:shadow-none">
+                <kbd className="font-mono bg-offwhite-card dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-xs dark:shadow-none">
                   ?
                 </kbd>
               </div>
@@ -65,7 +65,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
               Flow Principles
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="p-3 bg-zinc-100/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1">
+              <div className="p-3 bg-offwhite-card/90 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1 shadow-xs">
                 <div className="flex items-center gap-1.5 text-brand-600 dark:text-brand-300 font-medium">
                   <Shield className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400" />
                   <span>Strict WIP Limit (2)</span>
@@ -75,7 +75,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
                 </p>
               </div>
 
-              <div className="p-3 bg-zinc-100/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1">
+              <div className="p-3 bg-offwhite-card/90 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1 shadow-xs">
                 <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-300 font-medium">
                   <Clock className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
                   <span>Persistent Focus HUD</span>
@@ -85,7 +85,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
                 </p>
               </div>
 
-              <div className="p-3 bg-zinc-100/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1">
+              <div className="p-3 bg-offwhite-card/90 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1 shadow-xs">
                 <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-300 font-medium">
                   <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
                   <span>Brain Dump Buffer</span>
@@ -95,7 +95,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
                 </p>
               </div>
 
-              <div className="p-3 bg-zinc-100/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1">
+              <div className="p-3 bg-offwhite-card/90 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-1 shadow-xs">
                 <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-300 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
                   <span>Micro Checklists</span>
@@ -109,7 +109,7 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/60 flex justify-end">
+        <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 bg-offwhite-subtle/60 dark:bg-zinc-950/60 flex justify-end">
           <button
             onClick={onClose}
             className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-medium px-4 py-1.5 rounded-lg transition"
