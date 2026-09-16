@@ -89,7 +89,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
 
   // Multi-account reconciliation states
   const [selectedAccountId, setSelectedAccountId] = useState<string>(
-    defaultAccountId || (accounts.length > 0 ? accounts[0].id : '')
+    defaultAccountId || ''
   );
   const [statementMonth, setStatementMonth] = useState<string>(
     defaultMonth || new Date().toISOString().slice(0, 7)
@@ -99,7 +99,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (defaultAccountId) setSelectedAccountId(defaultAccountId);
+    if (isOpen) setSelectedAccountId(defaultAccountId || '');
     if (defaultMonth) setStatementMonth(defaultMonth);
   }, [defaultAccountId, defaultMonth, isOpen]);
 
@@ -690,12 +690,20 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                       onChange={(e) => handleSelectAccountChange(e.target.value)}
                       className="px-2.5 py-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer text-xs"
                     >
+                      <option value="">
+                        {accounts.length ? 'Use detected statement account' : 'Create from detected statement account'}
+                      </option>
                       {accounts.map((acc) => (
                         <option key={acc.id} value={acc.id}>
                           {acc.name} ({acc.type.toUpperCase()}) - {acc.institution}
                         </option>
                       ))}
                     </select>
+                    {!accounts.length && !parsedMeta.accountName && (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                        An account name must be detected to track this statement.
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 flex-wrap">

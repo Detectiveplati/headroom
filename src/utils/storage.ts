@@ -342,35 +342,13 @@ export function saveStoredCardMeta(userId: string, meta: CardMetaInfo): void {
   }
 }
 
-export const DEFAULT_ACCOUNTS: TrackedAccount[] = [
-  {
-    id: 'acc_dbs_multiplier',
-    name: 'DBS Multiplier',
-    institution: 'DBS Bank',
-    type: 'debit',
-    color: '#3b82f6', // blue
-    currentBalance: 0,
-    createdAt: Date.now(),
-  },
-  {
-    id: 'acc_ocbc_360',
-    name: 'OCBC 360',
-    institution: 'OCBC Bank',
-    type: 'debit',
-    color: '#ef4444', // red
-    currentBalance: 0,
-    createdAt: Date.now(),
-  },
-  {
-    id: 'acc_credit_card',
-    name: 'Credit Card',
-    institution: 'Card Issuer',
-    type: 'credit',
-    color: '#8b5cf6', // purple
-    currentBalance: 0,
-    createdAt: Date.now(),
-  },
-];
+export const DEFAULT_ACCOUNTS: TrackedAccount[] = [];
+
+const LEGACY_SAMPLE_ACCOUNT_IDS = new Set([
+  'acc_dbs_multiplier',
+  'acc_ocbc_360',
+  'acc_credit_card',
+]);
 
 export function loadStoredAccounts(userId?: string): TrackedAccount[] {
   try {
@@ -381,8 +359,15 @@ export function loadStoredAccounts(userId?: string): TrackedAccount[] {
       return DEFAULT_ACCOUNTS;
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed;
+    if (Array.isArray(parsed)) {
+      // Remove the former zero-balance sample banks, but retain an account that was
+      // genuinely used for reconciliation or given a balance by the user.
+      return parsed.filter((account): account is TrackedAccount =>
+        account && typeof account === 'object' &&
+        (!LEGACY_SAMPLE_ACCOUNT_IDS.has(account.id) ||
+          Number(account.currentBalance) !== 0 ||
+          Boolean(account.lastReconciledMonth))
+      );
     }
     return DEFAULT_ACCOUNTS;
   } catch (e) {
