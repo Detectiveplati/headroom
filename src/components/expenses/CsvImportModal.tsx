@@ -19,7 +19,7 @@ import {
   TrackedAccount,
   AccountType
 } from '../../types';
-import { parseBankStatementCsv, getTransactionSignature } from '../../utils/csvParser';
+import { getReusableRulePattern, getTransactionTypeForCategory, parseBankStatementCsv, getTransactionSignature } from '../../utils/csvParser';
 
 export interface StatementUploadContext {
   accountId?: string;
@@ -283,18 +283,16 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     if (!currentTransaction) return;
 
     setParsedTransactions((prev) =>
-      prev.map((tx) => (tx.id === id ? { ...tx, category: newCategory } : tx))
+      prev.map((tx) => tx.id === id
+        ? { ...tx, category: newCategory, type: getTransactionTypeForCategory(newCategory, tx.type) }
+        : tx)
     );
 
-    if (currentTransaction.category !== 'Uncategorized' || newCategory === 'Uncategorized') return;
+    if (currentTransaction.category === newCategory) return;
 
-    // Keep a stable, literal merchant phrase so future statement imports match locally.
-    const rulePattern = (currentTransaction.cleanMerchant || currentTransaction.rawDescription)
-      .toUpperCase()
-      .replace(/\b\d{2}[A-Z]{3}\b|\b\d{4,}\b/g, ' ')
-      .replace(/[^A-Z0-9]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const rulePattern = getReusableRulePattern(
+      currentTransaction.cleanMerchant || currentTransaction.rawDescription
+    );
 
     if (rulePattern && onSaveRule) {
       onSaveRule(rulePattern, newCategory);

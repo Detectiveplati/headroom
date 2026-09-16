@@ -176,6 +176,24 @@ export function cleanMerchantName(raw: string): string {
   return cleaned || raw;
 }
 
+export function getReusableRulePattern(description: string): string {
+  return description
+    .toUpperCase()
+    .replace(/\b\d{2}[A-Z]{3}\b|\b\d{4,}\b/g, ' ')
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function getTransactionTypeForCategory(
+  category: ExpenseCategory,
+  currentType: TransactionType
+): TransactionType {
+  if (category === 'Salary & Income') return 'income';
+  if (category === 'Transfer / Payment' || category === 'PayNow Transfers') return 'transfer';
+  return currentType;
+}
+
 // Auto-categorize based on description, amounts, and user-defined custom rules
 export function categorizeTransaction(
   rawDesc: string,
@@ -207,14 +225,10 @@ export function categorizeTransaction(
     }
 
     if (matches) {
-      let type: TransactionType = 'expense';
-      if (savedCategory === 'Salary & Income' || (credit > 0 && isIncomeKeyword)) {
-        type = 'income';
-      } else if (savedCategory === 'Transfer / Payment' || savedCategory === 'PayNow Transfers') {
-        type = 'transfer';
-      } else if (credit > 0 && debit === 0) {
-        type = 'refund';
-      }
+      const defaultType: TransactionType = credit > 0 && debit === 0
+        ? (isIncomeKeyword ? 'income' : 'refund')
+        : 'expense';
+      const type = getTransactionTypeForCategory(savedCategory, defaultType);
       return {
         cleanMerchant: cleanName,
         category: savedCategory,

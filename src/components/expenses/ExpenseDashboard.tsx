@@ -34,6 +34,7 @@ import {
 import { CsvImportModal, StatementUploadContext } from './CsvImportModal';
 import { BalanceSheetOverview } from './BalanceSheetOverview';
 import { MonthlyUploadTracker } from './MonthlyUploadTracker';
+import { getReusableRulePattern, getTransactionTypeForCategory } from '../../utils/csvParser';
 
 interface ExpenseDashboardProps {
   transactions: Transaction[];
@@ -323,15 +324,14 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
 
   const handleInlineCategoryChange = (txId: string, merchant: string, newCat: ExpenseCategory) => {
     onUpdateTransactions((prev) =>
-      prev.map((t) => (t.id === txId ? { ...t, category: newCat, reviewed: true } : t))
+      prev.map((t) => t.id === txId
+        ? { ...t, category: newCat, type: getTransactionTypeForCategory(newCat, t.type), reviewed: true }
+        : t)
     );
 
-    // Prompt user to remember rule
-    const shouldRemember = window.confirm(
-      `Remember "${newCat}" for all future transactions from "${merchant}"?`
-    );
-    if (shouldRemember) {
-      onSaveRule(merchant, newCat);
+    const rulePattern = getReusableRulePattern(merchant);
+    if (rulePattern) {
+      onSaveRule(rulePattern, newCat);
     }
   };
 
