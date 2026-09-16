@@ -349,25 +349,34 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const itemsToCategorize = uncategorized.map((tx) => ({
-        rawDescription: tx.rawDescription,
-        amount: tx.amount,
-        type: tx.type,
-      }));
+      // The API accepts compact batches of 100 descriptions. This avoids repeating the
+      // categorization prompt per transaction while keeping response size predictable.
+      const batchSize = 100;
+      const batches = Array.from(
+        { length: Math.ceil(uncategorized.length / batchSize) },
+        (_, index) => uncategorized.slice(index * batchSize, (index + 1) * batchSize)
+          .map((transaction) => transaction.rawDescription)
+      );
+      const responses = await Promise.all(
+        batches.map(async (items) => {
+          const res = await fetch('/api/expenses/categorize-unknown', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Failed to categorize unknown transactions');
+          }
+          return data as { categorized?: CategorizedRuleResult[]; newRules?: Record<string, ExpenseCategory> };
+        })
+      );
 
-      const res = await fetch('/api/expenses/categorize-unknown', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: itemsToCategorize }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to categorize unknown transactions');
-      }
+      const categorized = responses.flatMap((response) => response.categorized || []);
+      const newRules = Object.assign({}, ...responses.map((response) => response.newRules || {}));
 
       const resultsMap = new Map<string, CategorizedRuleResult>();
-      for (const item of (data.categorized || [])) {
+      for (const item of categorized) {
         resultsMap.set(String(item.rawDescription || '').trim().toUpperCase(), item);
       }
 
@@ -386,15 +395,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
         })
       );
 
-      if (data.newRules && Object.keys(data.newRules).length > 0) {
+      if (Object.keys(newRules).length > 0) {
         if (onSaveRulesBatch) {
-          onSaveRulesBatch(data.newRules);
+          onSaveRulesBatch(newRules);
         } else if (onSaveRule) {
-          for (const [pat, cat] of Object.entries(data.newRules)) {
+          for (const [pat, cat] of Object.entries(newRules)) {
             onSaveRule(pat, cat as ExpenseCategory);
           }
         }
-        setAiNotice(`Learned and saved ${Object.keys(data.newRules).length} new regex rule(s) to database!`);
+        setAiNotice(`Learned and saved ${Object.keys(newRules).length} new regex rule(s) to database!`);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'AI categorization failed';

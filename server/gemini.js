@@ -179,9 +179,40 @@ Also extract:
   };
 }
 
+const MAX_CATEGORIZATION_BATCH_SIZE = 100;
+
+const CATEGORY_BY_CODE = {
+  income: 'Salary & Income',
+  food: 'Food & Dining',
+  grocery: 'Groceries',
+  transport: 'Transport & Petrol',
+  shopping: 'Shopping & E-Commerce',
+  entertainment: 'Entertainment & Gaming',
+  personal: 'Personal Care & Services',
+  bills: 'Bills & Utilities',
+  transfer: 'Transfer / Payment',
+  unknown: 'Uncategorized',
+};
+
+const TYPE_BY_CODE = {
+  e: 'expense',
+  i: 'income',
+  r: 'refund',
+  t: 'transfer',
+};
+
+function getCategorizationKey(description) {
+  return description
+    .toUpperCase()
+    .replace(/\b\d{1,2}[A-Z]{3}\b|\b\d{4,}\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
- * Categorize unknown/foreign transactions and extract regex matching patterns using Gemini 2.0 Flash-Lite
- * @param {Array<{ rawDescription: string, amount?: number, type?: string } | string>} rawItems
+ * Categorize a compact batch of unknown transactions and return UI-friendly results.
+ * Gemini sees only an ID and representative description; raw descriptions are restored locally.
+ * @param {Array<{ rawDescription: string } | string>} rawItems
  * @returns {Promise<{ categorized: Array<{ rawDescription: string, cleanMerchant: string, category: string, suggestedRegex: string, type: string }>, newRules: Record<string, string> }>}
  */
 export async function categorizeUnknownTransactions(rawItems = []) {
@@ -193,18 +224,25 @@ export async function categorizeUnknownTransactions(rawItems = []) {
     );
   }
 
-  // Deduplicate items by normalized raw description
+  if (rawItems.length > MAX_CATEGORIZATION_BATCH_SIZE) {
+    throw new Error(`Categorization batches are limited to ${MAX_CATEGORIZATION_BATCH_SIZE} transactions.`);
+  }
+
+  // Group harmless statement variants (dates and card/reference numbers) under one AI lookup.
   const uniqueItemsMap = new Map();
   for (const item of rawItems) {
     const raw = typeof item === 'string' ? item : item?.rawDescription || '';
     const trimmed = raw.trim();
     if (!trimmed) continue;
-    const key = trimmed.toUpperCase();
-    if (!uniqueItemsMap.has(key)) {
+    const key = getCategorizationKey(trimmed);
+    const existing = uniqueItemsMap.get(key);
+    if (existing) {
+      existing.rawDescriptions.push(trimmed);
+    } else {
       uniqueItemsMap.set(key, {
-        rawDescription: trimmed,
-        amount: typeof item === 'object' && item?.amount !== undefined ? item.amount : 0,
-        type: typeof item === 'object' && item?.type ? item.type : 'expense',
+        id: String(uniqueItemsMap.size),
+        representativeDescription: trimmed,
+        rawDescriptions: [trimmed],
       });
     }
   }
@@ -214,16 +252,12 @@ export async function categorizeUnknownTransactions(rawItems = []) {
     return { categorized: [], newRules: {} };
   }
 
-  const promptText = `You are a financial transaction categorization assistant.
-Analyze these unknown bank statement transactions and determine:
-1. cleanMerchant: A readable, clean brand or merchant name (e.g. 'Flower Chimp', 'Singapore Airlines', 'Gojek', 'Monthly Salary').
-2. category: The most appropriate category from:
-   ${EXPENSE_CATEGORIES.map((c) => `"${c}"`).join(', ')}.
-3. suggestedRegex: An uppercase keyword or regex pattern suitable for regex/keyword matching to automatically recognize this merchant in future raw descriptions without calling an AI API (e.g. for "Flower Chimp Me 14MAY 4628", return "FLOWER CHIMP"; for "PAYROLL SALARY MAY", return "SALARY|PAYROLL"). Keep it simple and uppercase.
-4. type: One of 'expense', 'income' (salary, payroll, inbound deposits), 'refund' (returns, reversals), or 'transfer' (inter-bank transfer, card payment).
-
-Transactions to categorize:
-${JSON.stringify(uniqueList, null, 2)}`;
+  const compactItems = uniqueList.map((item) => [item.id, item.representativeDescription]);
+  const promptText = `Classify each bank transaction. Return exactly one result for every input ID.
+Fields: i=input ID; m=clean merchant; c=category code; p=uppercase reusable keyword/short regex; t=type code.
+Categories: income=Salary & Income, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, unknown=Uncategorized.
+Types: e=expense, i=income, r=refund, t=transfer. Use unknown when uncertain. Do not include prose.
+Input: ${JSON.stringify(compactItems)}`;
 
   const requestBody = {
     contents: [
@@ -241,28 +275,28 @@ ${JSON.stringify(uniqueList, null, 2)}`;
       responseSchema: {
         type: 'OBJECT',
         properties: {
-          results: {
+          r: {
             type: 'ARRAY',
             items: {
               type: 'OBJECT',
               properties: {
-                rawDescription: { type: 'STRING' },
-                cleanMerchant: { type: 'STRING' },
-                category: {
+                i: { type: 'STRING' },
+                m: { type: 'STRING' },
+                c: {
                   type: 'STRING',
-                  enum: EXPENSE_CATEGORIES,
+                  enum: Object.keys(CATEGORY_BY_CODE),
                 },
-                suggestedRegex: { type: 'STRING' },
-                type: {
+                p: { type: 'STRING' },
+                t: {
                   type: 'STRING',
-                  enum: ['expense', 'income', 'refund', 'transfer'],
+                  enum: Object.keys(TYPE_BY_CODE),
                 },
               },
-              required: ['rawDescription', 'cleanMerchant', 'category', 'suggestedRegex', 'type'],
+              required: ['i', 'm', 'c', 'p', 't'],
             },
           },
         },
-        required: ['results'],
+        required: ['r'],
       },
     },
   };
@@ -299,25 +333,29 @@ ${JSON.stringify(uniqueList, null, 2)}`;
   }
 
   const parsed = JSON.parse(textPayload);
-  const results = Array.isArray(parsed.results) ? parsed.results : [];
+  const results = Array.isArray(parsed.r) ? parsed.r : [];
 
   const categorized = [];
   const newRules = {};
 
   for (const item of results) {
-    const rawDesc = String(item.rawDescription || '').trim();
-    const cleanMerchant = String(item.cleanMerchant || rawDesc).trim();
-    const category = EXPENSE_CATEGORIES.includes(item.category) ? item.category : 'Uncategorized';
-    const type = ['expense', 'income', 'refund', 'transfer'].includes(item.type) ? item.type : 'expense';
-    const suggestedRegex = String(item.suggestedRegex || cleanMerchant).trim().toUpperCase();
+    const source = uniqueList.find((sourceItem) => sourceItem.id === String(item.i));
+    if (!source) continue;
 
-    categorized.push({
-      rawDescription: rawDesc,
-      cleanMerchant,
-      category,
-      suggestedRegex,
-      type,
-    });
+    const cleanMerchant = String(item.m || source.representativeDescription).trim();
+    const category = CATEGORY_BY_CODE[item.c] || 'Uncategorized';
+    const type = TYPE_BY_CODE[item.t] || 'expense';
+    const suggestedRegex = String(item.p || cleanMerchant).trim().toUpperCase();
+
+    for (const rawDescription of source.rawDescriptions) {
+      categorized.push({
+        rawDescription,
+        cleanMerchant,
+        category,
+        suggestedRegex,
+        type,
+      });
+    }
 
     if (suggestedRegex && category && category !== 'Uncategorized') {
       newRules[suggestedRegex] = category;
