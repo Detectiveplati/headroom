@@ -152,6 +152,11 @@ export function cleanMerchantName(raw: string): string {
   // Bill payment
   if (upper.includes('BILL PAYMENT')) return 'DBS Credit Card Bill Payment';
 
+  // Salary & Inbound Income
+  if (upper.includes('SALARY') || upper.includes('PAYROLL') || upper.includes('DIRECT CREDIT')) {
+    return 'Salary / Payroll Deposit';
+  }
+
   // Clean generic suffixes
   let cleaned = raw
     .replace(/\b(SINGAPORE|SGP|SIN|PTE LTD|LLC|INC|CO|CORP|DEPT)\b/gi, '')
@@ -186,10 +191,30 @@ export function categorizeTransaction(
   const upper = rawDesc.toUpperCase();
   const cleanName = cleanMerchantName(rawDesc);
 
-  // Check custom user memory rules first
+  const isIncomeKeyword =
+    /SALARY|PAYROLL|DIRECT CREDIT|GIRO - SALARY|MONTHLY PAY|DIVIDEND|BONUS|ALLOWANCE|STIPEND|INTEREST EARNED|INCOME/.test(
+      upper
+    );
+
+  // Check custom user memory rules first (with regex and substring matching)
   for (const [pattern, savedCategory] of Object.entries(customRules)) {
-    if (upper.includes(pattern.toUpperCase()) || cleanName.toLowerCase().includes(pattern.toLowerCase())) {
-      const type: TransactionType = credit > 0 && debit === 0 ? 'refund' : 'expense';
+    let matches = false;
+    try {
+      const reg = new RegExp(pattern, 'i');
+      matches = reg.test(rawDesc) || reg.test(cleanName);
+    } catch {
+      matches = upper.includes(pattern.toUpperCase()) || cleanName.toLowerCase().includes(pattern.toLowerCase());
+    }
+
+    if (matches) {
+      let type: TransactionType = 'expense';
+      if (savedCategory === 'Salary & Income' || (credit > 0 && isIncomeKeyword)) {
+        type = 'income';
+      } else if (savedCategory === 'Transfer / Payment') {
+        type = 'transfer';
+      } else if (credit > 0 && debit === 0) {
+        type = 'refund';
+      }
       return {
         cleanMerchant: cleanName,
         category: savedCategory,
@@ -214,7 +239,19 @@ export function categorizeTransaction(
     };
   }
 
-  // 2. Refunds & Credits
+  // 2. Salary & Inbound Income
+  if (credit > 0 && isIncomeKeyword) {
+    return {
+      cleanMerchant: cleanName.includes('Salary') || cleanName.includes('Payroll')
+        ? cleanName
+        : `Salary / ${cleanName}`,
+      category: 'Salary & Income',
+      type: 'income',
+      amount: credit,
+    };
+  }
+
+  // 3. Refunds & Credits
   if (credit > 0 && debit === 0) {
     let cat: ExpenseCategory = 'Shopping & E-Commerce';
     if (/GRAB|TAXI|COMFORT/.test(upper)) cat = 'Transport & Petrol';
@@ -298,25 +335,37 @@ export interface ParseResult {
   duplicateCount: number;
 }
 
-// Generate unique transaction signature for duplicate checking
-export function getTransactionSignature(t: { date: string; amount: number; rawDescription: string }): string {
+// Generate unique transaction signature for duplicate checking (account-aware)
+export function getTransactionSignature(
+  t: { date: string; amount: number; rawDescription: string; accountId?: string; accountName?: string },
+  forcedAccountId?: string
+): string {
+  const acc = forcedAccountId || t.accountId || (t.accountName ? t.accountName.trim().toLowerCase() : '');
   const normDate = normalizeDate(t.date);
   const normAmount = Number(t.amount).toFixed(2);
-  const normDesc = t.rawDescription.trim().toLowerCase();
-  return `${normDate}|${normAmount}|${normDesc}`;
+  const normDesc = (t.rawDescription || '').trim().toLowerCase();
+  return `${acc ? `${acc}|` : ''}${normDate}|${normAmount}|${normDesc}`;
 }
 
 // Main parser function taking raw CSV text and existing transactions
 export function parseBankStatementCsv(
   csvText: string,
   existingTransactions: Transaction[] = [],
-  customRules: Record<string, ExpenseCategory> = {}
+  customRules: Record<string, ExpenseCategory> = {},
+  targetAccountId?: string
 ): ParseResult {
   const rows = parseCsvRows(csvText);
   const meta: CardMetaInfo = {};
 
-  // Existing signatures set for quick duplicate lookup
-  const existingSignatures = new Set(existingTransactions.map((t) => getTransactionSignature(t)));
+  // Build existing signatures set for duplicate lookup
+  const existingSignatures = new Set<string>();
+  for (const t of existingTransactions) {
+    // Add both with accountId and without accountId to catch duplicates cleanly
+    existingSignatures.add(getTransactionSignature(t));
+    if (targetAccountId && t.accountId === targetAccountId) {
+      existingSignatures.add(getTransactionSignature(t, targetAccountId));
+    }
+  }
 
   let headerRowIndex = -1;
   let dateCol = -1;
@@ -325,23 +374,38 @@ export function parseBankStatementCsv(
   let paymentTypeCol = -1;
   let debitCol = -1;
   let creditCol = -1;
+  let balanceCol = -1;
 
-  // 1. Scan first 15 rows for metadata and table header
-  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+  // 1. Scan first 25 rows for metadata and table header
+  for (let i = 0; i < Math.min(rows.length, 25); i++) {
     const row = rows[i];
     const joined = row.join(' ').toLowerCase();
 
     // DBS / POSB Card metadata
     if (joined.includes('card transaction details for') && row[1]) {
       meta.accountName = row[1];
+      meta.accountType = 'credit';
+    } else if (joined.includes('account details for') && row[1]) {
+      meta.accountName = row[1];
+      meta.accountType = 'debit';
     } else if (joined.includes('transactions as at') && row[1]) {
       meta.statementDate = row[1];
+    } else if (joined.includes('statement period') && (row[1] || row[2])) {
+      meta.statementPeriod = row[1] || row[2];
     } else if (joined.includes('credit limit') && row[1]) {
       const numMatch = row[1].match(/[\d,.]+/);
       if (numMatch) meta.creditLimit = parseFloat(numMatch[0].replace(/,/g, ''));
     } else if (joined.includes('available limit') && row[1]) {
       const numMatch = row[1].match(/[\d,.]+/);
       if (numMatch) meta.availableLimit = parseFloat(numMatch[0].replace(/,/g, ''));
+    } else if ((joined.includes('opening balance') || joined.includes('beginning balance')) && (row[1] || row[2])) {
+      const val = row[1] || row[2];
+      const numMatch = val.match(/-?[\d,.]+/);
+      if (numMatch) meta.openingBalance = parseFloat(numMatch[0].replace(/,/g, ''));
+    } else if ((joined.includes('closing balance') || joined.includes('ending balance') || joined.includes('statement balance')) && (row[1] || row[2])) {
+      const val = row[1] || row[2];
+      const numMatch = val.match(/-?[\d,.]+/);
+      if (numMatch) meta.closingBalance = parseFloat(numMatch[0].replace(/,/g, ''));
     }
 
     // Detect header row
@@ -359,6 +423,7 @@ export function parseBankStatementCsv(
       paymentTypeCol = lowerRow.findIndex((c) => c.includes('payment type'));
       debitCol = lowerRow.findIndex((c) => c.includes('debit') || c.includes('withdrawal'));
       creditCol = lowerRow.findIndex((c) => c.includes('credit') || c.includes('deposit'));
+      balanceCol = lowerRow.findIndex((c) => c.includes('balance') && !c.includes('opening') && !c.includes('closing'));
 
       // If generic single amount column
       if (debitCol === -1 && creditCol === -1) {
@@ -400,6 +465,12 @@ export function parseBankStatementCsv(
     const paymentType = paymentTypeCol !== -1 ? row[paymentTypeCol] : undefined;
     const normalizedDate = normalizeDate(rawDate);
 
+    let balanceAfterTx: number | undefined = undefined;
+    if (balanceCol !== -1 && row[balanceCol]) {
+      const parsedBal = parseFloat(row[balanceCol].replace(/[$,]/g, ''));
+      if (!isNaN(parsedBal)) balanceAfterTx = parsedBal;
+    }
+
     const { cleanMerchant, category, type, amount } = categorizeTransaction(
       rawDesc,
       debit,
@@ -407,8 +478,16 @@ export function parseBankStatementCsv(
       customRules
     );
 
-    const sig = `${normalizedDate}|${amount.toFixed(2)}|${rawDesc.trim().toLowerCase()}`;
-    const isDuplicate = existingSignatures.has(sig);
+    const tempTx = {
+      date: normalizedDate,
+      amount,
+      rawDescription: rawDesc,
+      accountId: targetAccountId,
+      accountName: meta.accountName,
+    };
+    const sigWithAcc = getTransactionSignature(tempTx, targetAccountId);
+    const sigWithoutAcc = getTransactionSignature(tempTx, '');
+    const isDuplicate = existingSignatures.has(sigWithAcc) || existingSignatures.has(sigWithoutAcc);
 
     if (isDuplicate) {
       duplicateCount++;
@@ -416,6 +495,8 @@ export function parseBankStatementCsv(
 
     const tx: Transaction = {
       id: `tx_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 7)}`,
+      accountId: targetAccountId,
+      accountName: meta.accountName || (targetAccountId ? undefined : 'DBS Credit Card'),
       date: normalizedDate,
       postingDate: rawPostingDate ? normalizeDate(rawPostingDate) : undefined,
       rawDescription: rawDesc,
@@ -424,12 +505,20 @@ export function parseBankStatementCsv(
       type,
       category,
       paymentType,
-      accountName: meta.accountName || 'DBS Credit Card',
+      balanceAfterTx,
       reviewed: false,
       createdAt: Date.now(),
     };
 
     transactions.push(tx);
+  }
+
+  // If closing balance wasn't found in header rows, but running balance was in the transactions
+  if (meta.closingBalance === undefined && transactions.length > 0) {
+    const lastWithBal = [...transactions].reverse().find((t) => t.balanceAfterTx !== undefined);
+    if (lastWithBal && lastWithBal.balanceAfterTx !== undefined) {
+      meta.closingBalance = lastWithBal.balanceAfterTx;
+    }
   }
 
   return {
@@ -439,3 +528,4 @@ export function parseBankStatementCsv(
     duplicateCount,
   };
 }
+

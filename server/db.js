@@ -3,6 +3,14 @@ import path from 'path';
 import crypto from 'crypto';
 import pg from 'pg';
 
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    process.loadEnvFile();
+  }
+} catch {
+  // .env may not exist in production or container environments
+}
+
 const { Pool } = pg;
 
 // Check if PostgreSQL is available via Railway or generic DATABASE_URL
@@ -74,6 +82,12 @@ const TABLE_INIT_SQL = `
     active_task_id VARCHAR(255),
     updated_at BIGINT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS expense_rules (
+    pattern VARCHAR(255) PRIMARY KEY,
+    category VARCHAR(100) NOT NULL,
+    created_at BIGINT NOT NULL
+  );
 `;
 
 if (DATABASE_URL) {
@@ -120,19 +134,19 @@ function ensureFileStore() {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   if (!fs.existsSync(JSON_FILE)) {
-    fs.writeFileSync(JSON_FILE, JSON.stringify({ boards: {}, users: {}, sessions: {} }), 'utf-8');
+    fs.writeFileSync(JSON_FILE, JSON.stringify({ boards: {}, users: {}, sessions: {}, categoryRules: {} }), 'utf-8');
   }
   if (fileStoreCache === null) {
     try {
       const parsed = JSON.parse(fs.readFileSync(JSON_FILE, 'utf-8'));
       // Migrate legacy board store format if needed
       if (parsed && !parsed.boards && !parsed.users) {
-        fileStoreCache = { boards: parsed, users: {}, sessions: {} };
+        fileStoreCache = { boards: parsed, users: {}, sessions: {}, categoryRules: {} };
       } else {
-        fileStoreCache = { boards: {}, users: {}, sessions: {}, ...parsed };
+        fileStoreCache = { boards: {}, users: {}, sessions: {}, categoryRules: {}, ...parsed };
       }
     } catch {
-      fileStoreCache = { boards: {}, users: {}, sessions: {} };
+      fileStoreCache = { boards: {}, users: {}, sessions: {}, categoryRules: {} };
     }
   }
 }
@@ -353,3 +367,89 @@ export async function saveBoard(boardId = 'default', boardData) {
   saveFileStore();
   return entry;
 }
+
+// ==================== EXPENSE CATEGORY RULES METHODS ====================
+export async function getCategoryRules() {
+  if (pool) {
+    try {
+      const res = await pool.query('SELECT pattern, category FROM expense_rules');
+      const rules = {};
+      for (const row of res.rows) {
+        rules[row.pattern] = row.category;
+      }
+      return rules;
+    } catch (err) {
+      console.error('[Database] PostgreSQL getCategoryRules error:', err.message);
+    }
+  }
+
+  ensureFileStore();
+  return fileStoreCache.categoryRules || {};
+}
+
+export async function saveCategoryRule(pattern, category) {
+  const cleanPattern = String(pattern || '').trim().toUpperCase();
+  const cleanCat = String(category || '').trim();
+  if (!cleanPattern || !cleanCat) return;
+
+  const now = Date.now();
+  if (pool) {
+    try {
+      await pool.query(`
+        INSERT INTO expense_rules (pattern, category, created_at)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (pattern) DO UPDATE SET category = EXCLUDED.category;
+      `, [cleanPattern, cleanCat, now]);
+      return { pattern: cleanPattern, category: cleanCat };
+    } catch (err) {
+      console.error('[Database] PostgreSQL saveCategoryRule error:', err.message);
+    }
+  }
+
+  ensureFileStore();
+  if (!fileStoreCache.categoryRules) {
+    fileStoreCache.categoryRules = {};
+  }
+  fileStoreCache.categoryRules[cleanPattern] = cleanCat;
+  saveFileStore();
+  return { pattern: cleanPattern, category: cleanCat };
+}
+
+export async function saveCategoryRulesBatch(rulesObj = {}) {
+  const entries = Object.entries(rulesObj);
+  if (entries.length === 0) return await getCategoryRules();
+
+  const now = Date.now();
+  if (pool) {
+    try {
+      for (const [pattern, category] of entries) {
+        const cleanPattern = String(pattern || '').trim().toUpperCase();
+        const cleanCat = String(category || '').trim();
+        if (!cleanPattern || !cleanCat) continue;
+        await pool.query(`
+          INSERT INTO expense_rules (pattern, category, created_at)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (pattern) DO UPDATE SET category = EXCLUDED.category;
+        `, [cleanPattern, cleanCat, now]);
+      }
+      return await getCategoryRules();
+    } catch (err) {
+      console.error('[Database] PostgreSQL saveCategoryRulesBatch error:', err.message);
+    }
+  }
+
+  ensureFileStore();
+  if (!fileStoreCache.categoryRules) {
+    fileStoreCache.categoryRules = {};
+  }
+  for (const [pattern, category] of entries) {
+    const cleanPattern = String(pattern || '').trim().toUpperCase();
+    const cleanCat = String(category || '').trim();
+    if (cleanPattern && cleanCat) {
+      fileStoreCache.categoryRules[cleanPattern] = cleanCat;
+    }
+  }
+  saveFileStore();
+  return fileStoreCache.categoryRules;
+}
+

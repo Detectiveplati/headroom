@@ -13,7 +13,6 @@ import {
   Layers, 
   Sliders, 
   Download, 
-  RefreshCw,
   ShoppingBag,
   Utensils,
   Car,
@@ -21,7 +20,8 @@ import {
   Smile,
   FileText,
   DollarSign,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Wallet
 } from 'lucide-react';
 import { 
   Transaction, 
@@ -31,7 +31,6 @@ import {
   CardMetaInfo 
 } from '../../types';
 import { CsvImportModal } from './CsvImportModal';
-import { getStarterExpenseData } from '../../utils/starterExpenses';
 
 interface ExpenseDashboardProps {
   transactions: Transaction[];
@@ -40,11 +39,13 @@ interface ExpenseDashboardProps {
   onUpdateBudgets: (newBudgets: CategoryBudget[]) => void;
   categoryRules: Record<string, ExpenseCategory>;
   onSaveRule: (pattern: string, category: ExpenseCategory) => void;
+  onSaveRulesBatch?: (newRules: Record<string, ExpenseCategory>) => void;
   cardMeta: CardMetaInfo;
   onUpdateCardMeta: (meta: CardMetaInfo) => void;
 }
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
+  'Salary & Income',
   'Food & Dining',
   'Groceries',
   'Transport & Petrol',
@@ -63,6 +64,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   onUpdateBudgets,
   categoryRules,
   onSaveRule,
+  onSaveRulesBatch,
   cardMeta,
   onUpdateCardMeta,
 }) => {
@@ -124,11 +126,16 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    const totalIncome = scope
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const totalRefunds = scope
       .filter((t) => t.type === 'refund')
       .reduce((sum, t) => sum + t.amount, 0);
 
     const netSpend = Math.max(0, totalSpend - totalRefunds);
+    const netCashflow = totalIncome - netSpend;
 
     const totalTransfers = scope
       .filter((t) => t.type === 'transfer')
@@ -136,6 +143,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
 
     // Spend by category
     const categorySpend: Record<ExpenseCategory, number> = {
+      'Salary & Income': 0,
       'Food & Dining': 0,
       'Groceries': 0,
       'Transport & Petrol': 0,
@@ -166,6 +174,8 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
 
     return {
       totalSpend,
+      totalIncome,
+      netCashflow,
       totalRefunds,
       netSpend,
       totalTransfers,
@@ -179,6 +189,8 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   // Category Icon Mapper
   const getCategoryIcon = (category: ExpenseCategory) => {
     switch (category) {
+      case 'Salary & Income':
+        return <Wallet className="w-3.5 h-3.5 text-emerald-500" />;
       case 'Food & Dining':
         return <Utensils className="w-3.5 h-3.5 text-amber-500" />;
       case 'Groceries':
@@ -238,11 +250,10 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     onUpdateTransactions((prev) => prev.map((t) => ({ ...t, reviewed: true })));
   };
 
-  const handleResetToStarter = () => {
-    if (window.confirm('Reload the original DBS statement transactions? Current entries will be replaced.')) {
-      const starter = getStarterExpenseData();
-      onUpdateTransactions(starter.transactions);
-      if (starter.meta) onUpdateCardMeta(starter.meta);
+  const handleClearAllTransactions = () => {
+    if (window.confirm('Are you sure you want to clear all transactions? This cannot be undone.')) {
+      onUpdateTransactions([]);
+      onUpdateCardMeta({});
     }
   };
 
@@ -371,19 +382,40 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
             <Download className="w-3.5 h-3.5" />
           </button>
 
-          {/* Reload Starter DBS Statement */}
-          <button
-            onClick={handleResetToStarter}
-            className="p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
-            title="Reload DBS statement sample data"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
+          {/* Clear All Transactions */}
+          {transactions.length > 0 && (
+            <button
+              onClick={handleClearAllTransactions}
+              className="p-1.5 rounded-xl border border-red-200 dark:border-red-900/40 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+              title="Clear all transactions"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Cockpit Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        {/* Monthly Income (Salaries / Inbound Deposits) */}
+        <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Monthly Income (Salaries)</span>
+            <Wallet className="w-4 h-4 text-emerald-500" />
+          </div>
+          <div className="mt-2">
+            <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              SGD ${stats.totalIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-zinc-500">
+              <span>Net Cashflow:</span>
+              <span className={`font-mono font-semibold ${stats.netCashflow >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                {stats.netCashflow >= 0 ? '+' : '-'}${Math.abs(stats.netCashflow).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Net Monthly Spend */}
         <div className="p-4 rounded-2xl bg-offwhite-surface dark:bg-zinc-900/80 border border-zinc-300/80 dark:border-zinc-800 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
@@ -430,9 +462,11 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
                 <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                   SGD ${cardMeta.availableLimit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
-                <div className="mt-1 text-[11px] text-zinc-500">
-                  Limit: SGD ${cardMeta.creditLimit?.toLocaleString() || '10,200'}
-                </div>
+                {cardMeta.creditLimit !== undefined && (
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    Limit: SGD ${cardMeta.creditLimit.toLocaleString()}
+                  </div>
+                )}
               </>
             ) : (
               <div className="text-sm text-zinc-400 py-2">Import a statement to view limit</div>
@@ -573,6 +607,16 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
               Refunds
             </button>
             <button
+              onClick={() => setSelectedType('income')}
+              className={`px-2.5 py-1 rounded-lg transition font-medium ${
+                selectedType === 'income'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              Income
+            </button>
+            <button
               onClick={() => setSelectedType('transfer')}
               className={`px-2.5 py-1 rounded-lg transition font-medium ${
                 selectedType === 'transfer'
@@ -643,7 +687,9 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-zinc-400">
-                    No transactions match your current filters.
+                    {transactions.length === 0
+                      ? 'No transactions yet. Click "Import Statement" (PDF/CSV) or "Add Entry" to upload your data.'
+                      : 'No transactions match your current filters.'}
                   </td>
                 </tr>
               ) : (
@@ -720,12 +766,14 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
                         className={
                           tx.type === 'expense'
                             ? 'text-zinc-900 dark:text-zinc-100'
-                            : tx.type === 'refund'
+                            : tx.type === 'income'
                             ? 'text-emerald-600 dark:text-emerald-400'
+                            : tx.type === 'refund'
+                            ? 'text-teal-600 dark:text-teal-400'
                             : 'text-blue-600 dark:text-blue-400'
                         }
                       >
-                        {tx.type === 'refund' ? '+' : tx.type === 'expense' ? '-' : ''}$
+                        {tx.type === 'income' || tx.type === 'refund' ? '+' : tx.type === 'expense' ? '-' : ''}$
                         {tx.amount.toFixed(2)}
                       </span>
                     </td>
@@ -755,6 +803,8 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         onImport={handleImportBatch}
         existingTransactions={transactions}
         categoryRules={categoryRules}
+        onSaveRule={onSaveRule}
+        onSaveRulesBatch={onSaveRulesBatch}
       />
 
       {/* Add Manual Transaction Modal */}
@@ -779,7 +829,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
                 <label className="block text-zinc-500 mb-1">Merchant / Payee</label>
                 <input
                   type="text"
-                  placeholder="e.g. Starbucks, NTUC FairPrice"
+                  placeholder="e.g. Starbucks, NTUC FairPrice, Tech Corp Salary"
                   value={newTxMerchant}
                   onChange={(e) => setNewTxMerchant(e.target.value)}
                   className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
@@ -807,6 +857,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
                     className="w-full p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200"
                   >
                     <option value="expense">Expense</option>
+                    <option value="income">Income (Salary / Deposit)</option>
                     <option value="refund">Refund</option>
                     <option value="transfer">Transfer</option>
                   </select>

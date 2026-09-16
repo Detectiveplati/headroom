@@ -7,9 +7,12 @@ import {
   loginUser, 
   getUserByToken, 
   deleteSession,
-  isPostgresConnected
+  isPostgresConnected,
+  getCategoryRules,
+  saveCategoryRule,
+  saveCategoryRulesBatch
 } from './server/db.js';
-import { parseStatementWithGemini } from './server/gemini.js';
+import { parseStatementWithGemini, categorizeUnknownTransactions } from './server/gemini.js';
 
 function syncApiPlugin(): Plugin {
   return {
@@ -159,6 +162,60 @@ function syncApiPlugin(): Plugin {
             res.end(JSON.stringify({ success: true, ...result }));
           } catch (aiErr: unknown) {
             const errMessage = aiErr instanceof Error ? aiErr.message : 'Unknown AI parsing error';
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: errMessage }));
+          }
+          return;
+        }
+
+        // GET /api/expenses/rules
+        if (pathname === '/api/expenses/rules' && req.method === 'GET') {
+          const rules = await getCategoryRules();
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, rules }));
+          return;
+        }
+
+        // POST /api/expenses/rules
+        if (pathname === '/api/expenses/rules' && req.method === 'POST') {
+          const payload = await readBody();
+          const { pattern, category, rules } = payload;
+          if (rules && typeof rules === 'object') {
+            const updated = await saveCategoryRulesBatch(rules);
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, rules: updated }));
+            return;
+          }
+          if (pattern && category) {
+            await saveCategoryRule(pattern, category);
+            const updated = await getCategoryRules();
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, rules: updated }));
+            return;
+          }
+          res.statusCode = 400;
+          res.end(JSON.stringify({ success: false, error: 'pattern and category or rules object required' }));
+          return;
+        }
+
+        // POST /api/expenses/categorize-unknown
+        if (pathname === '/api/expenses/categorize-unknown' && req.method === 'POST') {
+          const payload = await readBody();
+          const { items } = payload;
+          if (!Array.isArray(items) || items.length === 0) {
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, categorized: [], newRules: {} }));
+            return;
+          }
+          try {
+            const result = await categorizeUnknownTransactions(items);
+            if (result.newRules && Object.keys(result.newRules).length > 0) {
+              await saveCategoryRulesBatch(result.newRules);
+            }
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, categorized: result.categorized, newRules: result.newRules }));
+          } catch (catErr: unknown) {
+            const errMessage = catErr instanceof Error ? catErr.message : 'Unknown AI categorization error';
             res.statusCode = 400;
             res.end(JSON.stringify({ success: false, error: errMessage }));
           }

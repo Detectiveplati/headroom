@@ -45,8 +45,6 @@ import { ExpenseDashboard } from './components/expenses/ExpenseDashboard';
 import { LoginPage } from './components/LoginPage';
 import { TaskModal } from './components/TaskModal';
 import { WipLimitModal } from './components/WipLimitModal';
-import { BackupModal } from './components/BackupModal';
-import { HelpShortcutsModal } from './components/HelpShortcutsModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
 import { AuthModal } from './components/AuthModal';
 
@@ -81,8 +79,6 @@ export const App: React.FC = () => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [defaultColumnForNew, setDefaultColumnForNew] = useState<ColumnId>('backlog');
   const [wipViolationTask, setWipViolationTask] = useState<Task | null>(null);
-  const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
-  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
   // Synchronization refs to prevent circular pushes
   const isSyncingFromRemoteRef = useRef(false);
@@ -130,12 +126,48 @@ export const App: React.FC = () => {
     saveStoredCardMeta(cardMeta);
   }, [cardMeta]);
 
+  // Load server-persisted category rules and merge with local
+  useEffect(() => {
+    fetch('/api/expenses/rules')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.success && data.rules && Object.keys(data.rules).length > 0) {
+          setCategoryRules((prev) => {
+            const merged = { ...prev, ...data.rules };
+            saveStoredCategoryRules(merged);
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleSaveCategoryRule = useCallback((pattern: string, category: ExpenseCategory) => {
     setCategoryRules((prev) => {
       const updated = { ...prev, [pattern]: category };
       saveStoredCategoryRules(updated);
       return updated;
     });
+
+    fetch('/api/expenses/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pattern, category }),
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveRulesBatch = useCallback((newRules: Record<string, ExpenseCategory>) => {
+    setCategoryRules((prev) => {
+      const updated = { ...prev, ...newRules };
+      saveStoredCategoryRules(updated);
+      return updated;
+    });
+
+    fetch('/api/expenses/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules: newRules }),
+    }).catch(() => {});
   }, []);
 
   // Theme Manager: Sync system / dark / light mode to document <html> element
@@ -528,14 +560,9 @@ export const App: React.FC = () => {
         setEditingTask(null);
         setDefaultColumnForNew('backlog');
         setIsTaskModalOpen(true);
-      } else if (!isInput && e.key === '?') {
-        e.preventDefault();
-        setIsShortcutsModalOpen(true);
       } else if (e.key === 'Escape') {
         setIsTaskModalOpen(false);
         setWipViolationTask(null);
-        setIsBackupModalOpen(false);
-        setIsShortcutsModalOpen(false);
         setIsCloudSyncModalOpen(false);
         setIsAuthModalOpen(false);
       }
@@ -584,8 +611,6 @@ export const App: React.FC = () => {
           setDefaultColumnForNew('backlog');
           setIsTaskModalOpen(true);
         }}
-        onOpenBackupModal={() => setIsBackupModalOpen(true)}
-        onOpenShortcutsModal={() => setIsShortcutsModalOpen(true)}
         onOpenTaskModal={(task) => {
           setEditingTask(task);
           setIsTaskModalOpen(true);
@@ -627,6 +652,7 @@ export const App: React.FC = () => {
             onUpdateBudgets={setBudgets}
             categoryRules={categoryRules}
             onSaveRule={handleSaveCategoryRule}
+            onSaveRulesBatch={handleSaveRulesBatch}
             cardMeta={cardMeta}
             onUpdateCardMeta={setCardMeta}
           />
@@ -668,24 +694,6 @@ export const App: React.FC = () => {
         onUpdateBoardKey={handleUpdateBoardKey}
         onForcePull={() => syncPullFromCloud(boardKey, true)}
         onForcePush={handleForcePush}
-      />
-
-      {/* Backup & Sync Modal */}
-      <BackupModal
-        isOpen={isBackupModalOpen}
-        onClose={() => setIsBackupModalOpen(false)}
-        tasks={tasks}
-        settings={settings}
-        onRestoreData={(newTasks, newSettings) => {
-          setTasks(newTasks);
-          if (newSettings) setSettings(newSettings);
-        }}
-      />
-
-      {/* Help & Shortcuts Modal */}
-      <HelpShortcutsModal
-        isOpen={isShortcutsModalOpen}
-        onClose={() => setIsShortcutsModalOpen(false)}
       />
 
       {/* User Authentication Modal */}

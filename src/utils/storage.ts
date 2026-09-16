@@ -1,5 +1,13 @@
-import { Task, AppSettings, Transaction, CategoryBudget, ExpenseCategory, CardMetaInfo } from '../types';
-import { getStarterExpenseData } from './starterExpenses';
+import { 
+  Task, 
+  AppSettings, 
+  Transaction, 
+  CategoryBudget, 
+  ExpenseCategory, 
+  CardMetaInfo,
+  TrackedAccount,
+  MonthlyAccountUpload
+} from '../types';
 
 const STORAGE_KEY_TASKS = 'headroom_tasks_v1';
 const STORAGE_KEY_SETTINGS = 'headroom_settings_v1';
@@ -8,6 +16,9 @@ const STORAGE_KEY_EXPENSES = 'headroom_expenses_v1';
 const STORAGE_KEY_BUDGETS = 'headroom_budgets_v1';
 const STORAGE_KEY_RULES = 'headroom_category_rules_v1';
 const STORAGE_KEY_CARD_META = 'headroom_card_meta_v1';
+const STORAGE_KEY_ACCOUNTS = 'headroom_tracked_accounts_v1';
+const STORAGE_KEY_UPLOAD_LOGS = 'headroom_monthly_upload_logs_v1';
+const STORAGE_KEY_SCRUBBED = 'headroom_sample_scrubbed_v1';
 
 export const DEFAULT_BUDGETS: CategoryBudget[] = [
   { category: 'Food & Dining', monthlyLimit: 700 },
@@ -210,16 +221,25 @@ export function importBoardData(jsonText: string): { tasks: Task[]; settings?: A
 // Expense & Budget Local-First Storage
 // -------------------------------------------------------------
 
+function ensureSampleDataPurged(): void {
+  try {
+    if (localStorage.getItem(STORAGE_KEY_SCRUBBED) !== 'true') {
+      // Purge any previously cached sample transactions and card metadata
+      localStorage.removeItem(STORAGE_KEY_EXPENSES);
+      localStorage.removeItem(STORAGE_KEY_CARD_META);
+      localStorage.setItem(STORAGE_KEY_SCRUBBED, 'true');
+    }
+  } catch {
+    // Graceful fallback for privacy mode / restricted storage
+  }
+}
+
 export function loadStoredTransactions(): Transaction[] {
   try {
+    ensureSampleDataPurged();
     const raw = localStorage.getItem(STORAGE_KEY_EXPENSES);
     if (!raw) {
-      const starter = getStarterExpenseData();
-      saveStoredTransactions(starter.transactions);
-      if (starter.meta) {
-        saveStoredCardMeta(starter.meta);
-      }
-      return starter.transactions;
+      return [];
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
@@ -237,6 +257,15 @@ export function saveStoredTransactions(transactions: Transaction[]): void {
     localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(transactions));
   } catch (e) {
     console.error('Failed to save transactions to localStorage', e);
+  }
+}
+
+export function clearAllExpenseData(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY_EXPENSES);
+    localStorage.removeItem(STORAGE_KEY_CARD_META);
+  } catch (e) {
+    console.error('Failed to clear expense data', e);
   }
 }
 
@@ -282,10 +311,10 @@ export function saveStoredCategoryRules(rules: Record<string, ExpenseCategory>):
 
 export function loadStoredCardMeta(): CardMetaInfo {
   try {
+    ensureSampleDataPurged();
     const raw = localStorage.getItem(STORAGE_KEY_CARD_META);
     if (!raw) {
-      const starter = getStarterExpenseData();
-      return starter.meta;
+      return {};
     }
     return JSON.parse(raw) || {};
   } catch (e) {
@@ -300,3 +329,84 @@ export function saveStoredCardMeta(meta: CardMetaInfo): void {
     console.error('Failed to save card metadata', e);
   }
 }
+
+export const DEFAULT_ACCOUNTS: TrackedAccount[] = [
+  {
+    id: 'acc_dbs_multiplier',
+    name: 'DBS Multiplier',
+    institution: 'DBS Bank',
+    type: 'debit',
+    color: '#3b82f6', // blue
+    currentBalance: 0,
+    createdAt: Date.now(),
+  },
+  {
+    id: 'acc_ocbc_360',
+    name: 'OCBC 360',
+    institution: 'OCBC Bank',
+    type: 'debit',
+    color: '#ef4444', // red
+    currentBalance: 0,
+    createdAt: Date.now(),
+  },
+  {
+    id: 'acc_credit_card',
+    name: 'Credit Card',
+    institution: 'Card Issuer',
+    type: 'credit',
+    color: '#8b5cf6', // purple
+    currentBalance: 0,
+    createdAt: Date.now(),
+  },
+];
+
+export function loadStoredAccounts(): TrackedAccount[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+    if (!raw) {
+      return DEFAULT_ACCOUNTS;
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    }
+    return DEFAULT_ACCOUNTS;
+  } catch (e) {
+    console.error('Failed to load accounts from localStorage', e);
+    return DEFAULT_ACCOUNTS;
+  }
+}
+
+export function saveStoredAccounts(accounts: TrackedAccount[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(accounts));
+  } catch (e) {
+    console.error('Failed to save accounts to localStorage', e);
+  }
+}
+
+export function loadStoredUploadLogs(): MonthlyAccountUpload[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_UPLOAD_LOGS);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+    return [];
+  } catch (e) {
+    console.error('Failed to load upload logs from localStorage', e);
+    return [];
+  }
+}
+
+export function saveStoredUploadLogs(logs: MonthlyAccountUpload[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_UPLOAD_LOGS, JSON.stringify(logs));
+  } catch (e) {
+    console.error('Failed to save upload logs to localStorage', e);
+  }
+}
+

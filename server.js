@@ -9,9 +9,12 @@ import {
   loginUser, 
   getUserByToken, 
   deleteSession,
-  isPostgresConnected
+  isPostgresConnected,
+  getCategoryRules,
+  saveCategoryRule,
+  saveCategoryRulesBatch
 } from './server/db.js';
-import { parseStatementWithGemini } from './server/gemini.js';
+import { parseStatementWithGemini, categorizeUnknownTransactions } from './server/gemini.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -217,6 +220,52 @@ const server = http.createServer(async (req, res) => {
           sendJson(res, 200, { success: true, ...result });
         } catch (aiErr) {
           sendJson(res, 400, { success: false, error: aiErr.message });
+        }
+        return;
+      }
+
+      // 9. GET /api/expenses/rules
+      if (pathname === '/api/expenses/rules' && req.method === 'GET') {
+        const rules = await getCategoryRules();
+        sendJson(res, 200, { success: true, rules });
+        return;
+      }
+
+      // 10. POST /api/expenses/rules
+      if (pathname === '/api/expenses/rules' && req.method === 'POST') {
+        const payload = await parseBody(req);
+        const { pattern, category, rules } = payload;
+        if (rules && typeof rules === 'object') {
+          const updated = await saveCategoryRulesBatch(rules);
+          sendJson(res, 200, { success: true, rules: updated });
+          return;
+        }
+        if (pattern && category) {
+          await saveCategoryRule(pattern, category);
+          const updated = await getCategoryRules();
+          sendJson(res, 200, { success: true, rules: updated });
+          return;
+        }
+        sendJson(res, 400, { success: false, error: 'pattern and category or rules object required' });
+        return;
+      }
+
+      // 11. POST /api/expenses/categorize-unknown (Gemini AI Batch Categorizer & Regex Learner)
+      if (pathname === '/api/expenses/categorize-unknown' && req.method === 'POST') {
+        const payload = await parseBody(req);
+        const { items } = payload;
+        if (!Array.isArray(items) || items.length === 0) {
+          sendJson(res, 200, { success: true, categorized: [], newRules: {} });
+          return;
+        }
+        try {
+          const result = await categorizeUnknownTransactions(items);
+          if (result.newRules && Object.keys(result.newRules).length > 0) {
+            await saveCategoryRulesBatch(result.newRules);
+          }
+          sendJson(res, 200, { success: true, categorized: result.categorized, newRules: result.newRules });
+        } catch (catErr) {
+          sendJson(res, 400, { success: false, error: catErr.message });
         }
         return;
       }

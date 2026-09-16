@@ -7,10 +7,6 @@ import {
   Plus, 
   Sparkles, 
   Clock, 
-  Volume2, 
-  VolumeX, 
-  FileDown, 
-  Keyboard,
   AlertTriangle,
   Cloud,
   CloudOff,
@@ -41,8 +37,6 @@ interface FocusHUDProps {
   onResetTimer: (taskId: string) => void;
   onCompleteTask: (taskId: string) => void;
   onOpenNewTaskModal: () => void;
-  onOpenBackupModal: () => void;
-  onOpenShortcutsModal: () => void;
   onOpenTaskModal: (task: Task) => void;
   settings: AppSettings;
   onUpdateSettings: (newSettings: Partial<AppSettings>) => void;
@@ -65,8 +59,6 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
   onResetTimer,
   onCompleteTask,
   onOpenNewTaskModal,
-  onOpenBackupModal,
-  onOpenShortcutsModal,
   onOpenTaskModal,
   settings,
   onUpdateSettings,
@@ -134,7 +126,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
     <header className="sticky top-0 z-40 w-full bg-offwhite-surface/95 dark:bg-[#0d0f16]/90 backdrop-blur-md border-b border-zinc-300/80 dark:border-zinc-800/80 shadow-sm dark:shadow-2xl transition-all pt-[max(0.5rem,env(safe-area-inset-top))]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-col md:flex-row items-center justify-between gap-3">
         
-        {/* Left: Brand, Context Switcher, & WIP status */}
+        {/* Left: Product and module navigation */}
         <div className="flex items-center gap-2.5 w-full md:w-auto justify-between md:justify-start flex-wrap">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20 ring-1 ring-white/10">
@@ -178,66 +170,55 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             </button>
           </div>
 
-          <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800 hidden sm:block" />
+          {activeTab === 'tasks' && (
+            <>
+              <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-800 hidden sm:block" />
 
-          {/* Context Switcher: Work vs Personal vs All */}
-          <div className="flex items-center bg-offwhite-subtle dark:bg-zinc-900/90 border border-zinc-300/70 dark:border-zinc-800 p-0.5 rounded-xl text-xs font-medium">
-            <button
-              onClick={() => onSelectContext('work')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition text-[11px] ${
-                activeContext === 'work'
-                  ? 'bg-brand-600 text-white font-semibold shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`}
-              title="Filter to Work tasks only"
-            >
-              <Briefcase className="w-3 h-3" />
-              <span>Work</span>
-            </button>
-            <button
-              onClick={() => onSelectContext('personal')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition text-[11px] ${
-                activeContext === 'personal'
-                  ? 'bg-brand-600 text-white font-semibold shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`}
-              title="Filter to Personal/Home tasks only"
-            >
-              <Home className="w-3 h-3" />
-              <span>Personal</span>
-            </button>
-            <button
-              onClick={() => onSelectContext('all')}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg transition text-[11px] ${
-                activeContext === 'all'
-                  ? 'bg-brand-600 text-white font-semibold shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              }`}
-              title="Show all tasks"
-            >
-              <Layers className="w-3 h-3" />
-            </button>
-          </div>
+              {/* Board-only context filter */}
+              <div className="flex items-center bg-offwhite-subtle dark:bg-zinc-900/90 border border-zinc-300/70 dark:border-zinc-800 p-0.5 rounded-xl text-xs font-medium">
+                <button
+                  onClick={() => onSelectContext('work')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition text-[11px] ${activeContext === 'work' ? 'bg-brand-600 text-white font-semibold shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                  title="Filter to Work tasks only"
+                >
+                  <Briefcase className="w-3 h-3" />
+                  <span>Work</span>
+                </button>
+                <button
+                  onClick={() => onSelectContext('personal')}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition text-[11px] ${activeContext === 'personal' ? 'bg-brand-600 text-white font-semibold shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                  title="Filter to Personal/Home tasks only"
+                >
+                  <Home className="w-3 h-3" />
+                  <span>Personal</span>
+                </button>
+                <button
+                  onClick={() => onSelectContext('all')}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg transition text-[11px] ${activeContext === 'all' ? 'bg-brand-600 text-white font-semibold shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
+                  title="Show all tasks"
+                >
+                  <Layers className="w-3 h-3" />
+                </button>
+              </div>
 
-          {/* WIP Gauge */}
-          <div 
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-colors ${
-              isWipAtCapacity
-                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40'
-                : 'bg-offwhite-subtle dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 border-zinc-300/70 dark:border-zinc-700/50'
-            }`}
-            title={`WIP Limit: ${wipCount} of ${settings.wipLimit} active slots used.`}
-          >
-            {isWipAtCapacity && <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
-            <span className="text-zinc-500 text-[10px]">WIP:</span>
-            <span className="font-mono font-semibold">{wipCount}/{settings.wipLimit}</span>
-          </div>
+              {/* Board-only WIP gauge */}
+              <div
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-colors ${isWipAtCapacity ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40' : 'bg-offwhite-subtle dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 border-zinc-300/70 dark:border-zinc-700/50'}`}
+                title={`WIP Limit: ${wipCount} of ${settings.wipLimit} active slots used.`}
+              >
+                {isWipAtCapacity && <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+                <span className="text-zinc-500 text-[10px]">WIP:</span>
+                <span className="font-mono font-semibold">{wipCount}/{settings.wipLimit}</span>
+              </div>
+            </>
+          )}
 
           {/* Cloud Sync Status Indicator */}
           <button
             type="button"
             onClick={onOpenSyncModal}
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-all ${
+            aria-label={`Cloud Sync: ${syncStatus}. Open sync controls.`}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all ${
               syncStatus === 'synced'
                 ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/35 hover:bg-emerald-500/25'
                 : syncStatus === 'syncing'
@@ -249,12 +230,11 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             {syncStatus === 'synced' && <Cloud className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
             {syncStatus === 'syncing' && <RefreshCw className="w-3 h-3 text-amber-600 dark:text-amber-400 animate-spin" />}
             {syncStatus !== 'synced' && syncStatus !== 'syncing' && <CloudOff className="w-3 h-3 text-zinc-500" />}
-            <span className="hidden lg:inline font-mono text-[10px] capitalize">{syncStatus}</span>
           </button>
         </div>
 
-        {/* Center: Primary Focus HUD */}
-        <div className="flex-1 w-full md:w-auto flex items-center justify-center">
+        {/* Center: Primary focus is intentionally board-only. */}
+        {activeTab === 'tasks' && <div className="flex-1 w-full md:w-auto flex items-center justify-center">
           {activeTask ? (
             <div className="flex items-center gap-3 bg-offwhite-card dark:bg-zinc-900/90 border border-brand-500/40 px-3.5 py-1.5 rounded-xl shadow-md shadow-brand-500/10 max-w-2xl w-full justify-between animate-fadeIn">
               <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
@@ -346,7 +326,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
               <span className="font-medium text-zinc-800 dark:text-zinc-200">Drag a card into "In Progress"</span>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Right: User account, Theme, New Task & Controls */}
         <div className="flex items-center gap-1.5 w-full md:w-auto justify-end">
@@ -384,46 +364,17 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             {settings.theme === 'light' && <Sun className="w-3.5 h-3.5 text-amber-600" />}
           </button>
 
-          {/* Quick Add */}
-          <button
-            onClick={onOpenNewTaskModal}
-            className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs px-3 py-1.5 rounded-lg shadow-lg shadow-brand-600/20 transition active:scale-95"
-            title="Create new task (Ctrl+K or N)"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Task</span>
-          </button>
+          {activeTab === 'tasks' && (
+            <button
+              onClick={onOpenNewTaskModal}
+              className="flex items-center gap-1.5 bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs px-3 py-1.5 rounded-lg shadow-lg shadow-brand-600/20 transition active:scale-95"
+              title="Create new task (Ctrl+K or N)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New Task</span>
+            </button>
+          )}
 
-          {/* Audio toggle */}
-          <button
-            onClick={() => onUpdateSettings({ soundEnabled: !settings.soundEnabled })}
-            className={`p-1.5 rounded-lg border transition ${
-              settings.soundEnabled 
-                ? 'bg-offwhite-subtle dark:bg-zinc-800/80 border-zinc-300/70 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-300' 
-                : 'bg-offwhite-surface dark:bg-zinc-900 border-zinc-300/70 dark:border-zinc-800 text-zinc-400'
-            }`}
-            title={settings.soundEnabled ? "Mute sound effects" : "Enable sound effects"}
-          >
-            {settings.soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-          </button>
-
-          {/* Backup Modal */}
-          <button
-            onClick={onOpenBackupModal}
-            className="p-1.5 rounded-lg border border-zinc-300/70 dark:border-zinc-800 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition"
-            title="Export / Import JSON Data"
-          >
-            <FileDown className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Keyboard Shortcuts */}
-          <button
-            onClick={onOpenShortcutsModal}
-            className="p-1.5 rounded-lg border border-zinc-300/70 dark:border-zinc-800 bg-offwhite-subtle dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition"
-            title="Keyboard shortcuts (?)"
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-          </button>
         </div>
 
       </div>

@@ -64,6 +64,7 @@ export type ActiveTab = 'tasks' | 'expenses';
 export type TransactionType = 'expense' | 'refund' | 'transfer' | 'income';
 
 export type ExpenseCategory =
+  | 'Salary & Income'
   | 'Food & Dining'
   | 'Groceries'
   | 'Transport & Petrol'
@@ -74,8 +75,36 @@ export type ExpenseCategory =
   | 'Transfer / Payment'
   | 'Uncategorized';
 
+export type AccountType = 'debit' | 'credit' | 'cash';
+
+export interface TrackedAccount {
+  id: string;
+  name: string;
+  institution?: string;
+  accountNumberMask?: string;
+  type: AccountType;
+  color: string;
+  currentBalance: number;
+  lastReconciledMonth?: string; // e.g. '2026-03'
+  createdAt: number;
+}
+
+export interface MonthlyAccountUpload {
+  id: string;
+  accountId: string;
+  month: string; // 'YYYY-MM'
+  uploadedAt: number;
+  fileName: string;
+  statementPeriod?: string;
+  startingBalance?: number;
+  closingBalance?: number;
+  transactionCount: number;
+}
+
 export interface Transaction {
   id: string;
+  accountId?: string;
+  accountName?: string;
   date: string; // YYYY-MM-DD or raw date
   postingDate?: string;
   rawDescription: string;
@@ -84,7 +113,7 @@ export interface Transaction {
   type: TransactionType;
   category: ExpenseCategory;
   paymentType?: string;
-  accountName?: string;
+  balanceAfterTx?: number;
   reviewed: boolean;
   createdAt: number;
 }
@@ -97,6 +126,27 @@ export interface CategoryBudget {
 export interface CardMetaInfo {
   accountName?: string;
   statementDate?: string;
+  statementPeriod?: string;
   creditLimit?: number;
   availableLimit?: number;
+  openingBalance?: number;
+  closingBalance?: number;
+  accountType?: AccountType;
+}
+
+export interface CategorizeRequest {
+  rawDescription: string;
+  amount?: number;
+  type?: TransactionType;
+}
+
+// Kept as an alias for callers that adopted the earlier name.
+export type CategorizeItemRequest = CategorizeRequest;
+
+export interface CategorizedRuleResult {
+  rawDescription: string;
+  cleanMerchant: string;
+  category: ExpenseCategory;
+  suggestedRegex: string;
+  type: TransactionType;
 }

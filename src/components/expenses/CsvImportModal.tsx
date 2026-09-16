@@ -10,18 +10,42 @@ import {
   AlertCircle,
   FileText
 } from 'lucide-react';
-import { Transaction, ExpenseCategory, CardMetaInfo } from '../../types';
+import { 
+  Transaction, 
+  ExpenseCategory, 
+  CardMetaInfo, 
+  CategorizedRuleResult,
+  TrackedAccount 
+} from '../../types';
 import { parseBankStatementCsv, getTransactionSignature } from '../../utils/csvParser';
+
+export interface StatementUploadContext {
+  accountId?: string;
+  month?: string;
+  closingBalance?: number;
+  startingBalance?: number;
+  fileName?: string;
+}
 
 interface CsvImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (newTransactions: Transaction[], meta: CardMetaInfo) => void;
+  onImport: (
+    newTransactions: Transaction[], 
+    meta: CardMetaInfo,
+    uploadContext?: StatementUploadContext
+  ) => void;
   existingTransactions: Transaction[];
   categoryRules: Record<string, ExpenseCategory>;
+  accounts?: TrackedAccount[];
+  defaultAccountId?: string;
+  defaultMonth?: string;
+  onSaveRule?: (pattern: string, category: ExpenseCategory) => void;
+  onSaveRulesBatch?: (newRules: Record<string, ExpenseCategory>) => void;
 }
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
+  'Salary & Income',
   'Food & Dining',
   'Groceries',
   'Transport & Petrol',
@@ -39,6 +63,11 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   onImport,
   existingTransactions,
   categoryRules,
+  accounts = [],
+  defaultAccountId,
+  defaultMonth,
+  onSaveRule,
+  onSaveRulesBatch,
 }) => {
   const [dragOver, setDragOver] = useState(false);
   const [csvText, setCsvText] = useState('');
@@ -50,29 +79,79 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   const [duplicateIds, setDuplicateIds] = useState<Set<string>>(new Set());
   const [fileName, setFileName] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isAiCategorizing, setIsAiCategorizing] = useState(false);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Multi-account reconciliation states
+  const [selectedAccountId, setSelectedAccountId] = useState<string>(
+    defaultAccountId || (accounts.length > 0 ? accounts[0].id : '')
+  );
+  const [statementMonth, setStatementMonth] = useState<string>(
+    defaultMonth || new Date().toISOString().slice(0, 7)
+  );
+  const [customClosingBalance, setCustomClosingBalance] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (defaultAccountId) setSelectedAccountId(defaultAccountId);
+    if (defaultMonth) setStatementMonth(defaultMonth);
+  }, [defaultAccountId, defaultMonth, isOpen]);
 
   if (!isOpen) return null;
 
   const applyTransactionsAndDedupe = (
     transactions: Transaction[], 
     meta: CardMetaInfo,
-    rawText?: string
+    rawText?: string,
+    overrideAccId?: string
   ) => {
     if (rawText !== undefined) setCsvText(rawText);
     setParsedTransactions(transactions);
     setParsedMeta(meta);
 
-    // Identify duplicates against existing transactions
-    const existingSigs = new Set(existingTransactions.map((t) => getTransactionSignature(t)));
+    if (meta.closingBalance !== undefined) {
+      setCustomClosingBalance(String(meta.closingBalance));
+    }
+
+    // Auto-match account if meta has accountName and no explicit override
+    let targetAccId = overrideAccId || selectedAccountId;
+    if (!overrideAccId && meta.accountName && accounts.length > 0) {
+      const lowerMeta = meta.accountName.toLowerCase();
+      const matched = accounts.find((a) => 
+        lowerMeta.includes(a.name.toLowerCase()) || 
+        (a.institution && lowerMeta.includes(a.institution.toLowerCase()))
+      );
+      if (matched) {
+        targetAccId = matched.id;
+        setSelectedAccountId(matched.id);
+      }
+    }
+
+    // Auto-detect statement month from transactions date
+    if (transactions.length > 0) {
+      const firstValidDate = transactions.find((t) => t.date && t.date.length >= 7);
+      if (firstValidDate) {
+        setStatementMonth(firstValidDate.date.slice(0, 7));
+      }
+    }
+
+    // Identify duplicates against existing transactions (account-aware)
+    const existingSigs = new Set<string>();
+    for (const t of existingTransactions) {
+      existingSigs.add(getTransactionSignature(t));
+      if (targetAccId && t.accountId === targetAccId) {
+        existingSigs.add(getTransactionSignature(t, targetAccId));
+      }
+    }
+
     const dupes = new Set<string>();
     const selected = new Set<string>();
 
     transactions.forEach((tx) => {
-      const sig = getTransactionSignature(tx);
-      if (existingSigs.has(sig)) {
+      const sigWithAcc = getTransactionSignature(tx, targetAccId);
+      const sigWithoutAcc = getTransactionSignature(tx, '');
+      if (existingSigs.has(sigWithAcc) || existingSigs.has(sigWithoutAcc)) {
         dupes.add(tx.id);
       } else {
         selected.add(tx.id);
@@ -86,7 +165,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   const handleProcessCsv = (text: string, name?: string) => {
     if (name) setFileName(name);
     setErrorMessage(null);
-    const result = parseBankStatementCsv(text, existingTransactions, categoryRules);
+    const result = parseBankStatementCsv(text, existingTransactions, categoryRules, selectedAccountId);
     applyTransactionsAndDedupe(result.transactions, result.meta, text);
   };
 
@@ -195,9 +274,92 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   const handleConfirmImport = () => {
     const toImport = parsedTransactions.filter((tx) => selectedTxIds.has(tx.id));
     if (toImport.length === 0) return;
-    onImport(toImport, parsedMeta);
+
+    const chosenAccount = accounts.find((a) => a.id === selectedAccountId);
+    const enrichedTxs = toImport.map((tx) => ({
+      ...tx,
+      accountId: selectedAccountId || undefined,
+      accountName: chosenAccount?.name || tx.accountName || parsedMeta.accountName,
+    }));
+
+    const closingBal = customClosingBalance.trim() !== '' 
+      ? parseFloat(customClosingBalance) 
+      : parsedMeta.closingBalance;
+
+    onImport(enrichedTxs, parsedMeta, {
+      accountId: selectedAccountId,
+      month: statementMonth,
+      closingBalance: !isNaN(Number(closingBal)) ? Number(closingBal) : undefined,
+      startingBalance: parsedMeta.openingBalance,
+      fileName: fileName || 'Statement',
+    });
+
     handleReset();
     onClose();
+  };
+
+  const handleAutoCategorizeUnknown = async () => {
+    const uncategorized = parsedTransactions.filter((t) => t.category === 'Uncategorized');
+    if (uncategorized.length === 0) return;
+
+    setIsAiCategorizing(true);
+    setAiNotice(null);
+    setErrorMessage(null);
+
+    try {
+      const itemsToCategorize = uncategorized.map((tx) => ({
+        rawDescription: tx.rawDescription,
+        amount: tx.amount,
+        type: tx.type,
+      }));
+
+      const res = await fetch('/api/expenses/categorize-unknown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: itemsToCategorize }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to categorize unknown transactions');
+      }
+
+      const resultsMap = new Map<string, CategorizedRuleResult>();
+      for (const item of (data.categorized || [])) {
+        resultsMap.set(String(item.rawDescription || '').trim().toUpperCase(), item);
+      }
+
+      setParsedTransactions((prev) =>
+        prev.map((tx) => {
+          const match = resultsMap.get(tx.rawDescription.trim().toUpperCase());
+          if (match) {
+            return {
+              ...tx,
+              cleanMerchant: match.cleanMerchant || tx.cleanMerchant,
+              category: match.category || tx.category,
+              type: match.type || tx.type,
+            };
+          }
+          return tx;
+        })
+      );
+
+      if (data.newRules && Object.keys(data.newRules).length > 0) {
+        if (onSaveRulesBatch) {
+          onSaveRulesBatch(data.newRules);
+        } else if (onSaveRule) {
+          for (const [pat, cat] of Object.entries(data.newRules)) {
+            onSaveRule(pat, cat as ExpenseCategory);
+          }
+        }
+        setAiNotice(`Learned and saved ${Object.keys(data.newRules).length} new regex rule(s) to database!`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'AI categorization failed';
+      setErrorMessage(msg);
+    } finally {
+      setIsAiCategorizing(false);
+    }
   };
 
   const handleReset = () => {
@@ -208,12 +370,18 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
     setDuplicateIds(new Set());
     setFileName(null);
     setIsAiLoading(false);
+    setIsAiCategorizing(false);
+    setAiNotice(null);
     setErrorMessage(null);
   };
 
   // Metrics on parsed batch
   const totalDebits = parsedTransactions
     .filter((t) => t.type === 'expense' && selectedTxIds.has(t.id))
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalIncome = parsedTransactions
+    .filter((t) => t.type === 'income' && selectedTxIds.has(t.id))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const totalRefunds = parsedTransactions
@@ -223,6 +391,8 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
   const totalTransfers = parsedTransactions
     .filter((t) => t.type === 'transfer' && selectedTxIds.has(t.id))
     .reduce((sum, t) => sum + t.amount, 0);
+
+  const uncategorizedCount = parsedTransactions.filter((t) => t.category === 'Uncategorized').length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -418,7 +588,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
               )}
 
               {/* Batch Summary Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                 <div className="p-2.5 rounded-xl bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-300/70 dark:border-zinc-800">
                   <span className="text-zinc-500">Selected Rows</span>
                   <div className="font-bold text-sm text-zinc-800 dark:text-zinc-100">
@@ -434,8 +604,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-300/70 dark:border-zinc-800">
-                  <span className="text-zinc-500">Refunds & Credits</span>
+                  <span className="text-zinc-500">Income (Salaries)</span>
                   <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400 font-mono">
+                    +${totalIncome.toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-300/70 dark:border-zinc-800">
+                  <span className="text-zinc-500">Refunds & Credits</span>
+                  <div className="font-bold text-sm text-teal-600 dark:text-teal-400 font-mono">
                     +${totalRefunds.toFixed(2)}
                   </div>
                 </div>
@@ -447,6 +624,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {aiNotice && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-700 dark:text-emerald-300 animate-fade-in">
+                  <span>✨ {aiNotice}</span>
+                  <button onClick={() => setAiNotice(null)} className="text-emerald-500 hover:text-emerald-700">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
 
               {/* Controls bar */}
               <div className="flex items-center justify-between text-xs pt-1 flex-wrap gap-2">
@@ -482,13 +668,40 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
-                >
-                  Clear & choose another file
-                </button>
+                <div className="flex items-center gap-3">
+                  {uncategorizedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAutoCategorizeUnknown}
+                      disabled={isAiCategorizing}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-md shadow-brand-500/20 transition active:scale-95 disabled:opacity-50"
+                      title="Send only unknown transactions to Gemini Flash-Lite, learn reusable regex rules, and save them to the database"
+                    >
+                      {isAiCategorizing ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Classifying {uncategorizedCount} unknown...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>AI Categorize {uncategorizedCount} unknown</span>
+                          <span className="text-[10px] px-1 py-0.5 bg-white/20 rounded font-normal">
+                            Saves regex to DB
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                  >
+                    Clear & choose another file
+                  </button>
+                </div>
               </div>
 
               {/* Staging Table */}
@@ -563,8 +776,10 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                               className={`px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${
                                 tx.type === 'expense'
                                   ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
-                                  : tx.type === 'refund'
+                                  : tx.type === 'income'
                                   ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                  : tx.type === 'refund'
+                                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30'
                                   : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30'
                               }`}
                             >
@@ -576,12 +791,14 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
                               className={
                                 tx.type === 'expense'
                                   ? 'text-zinc-900 dark:text-zinc-100'
-                                  : tx.type === 'refund'
+                                  : tx.type === 'income'
                                   ? 'text-emerald-600 dark:text-emerald-400'
+                                  : tx.type === 'refund'
+                                  ? 'text-teal-600 dark:text-teal-400'
                                   : 'text-blue-600 dark:text-blue-400'
                               }
                             >
-                              {tx.type === 'refund' ? '+' : tx.type === 'expense' ? '-' : ''}${tx.amount.toFixed(2)}
+                              {tx.type === 'income' || tx.type === 'refund' ? '+' : tx.type === 'expense' ? '-' : ''}${tx.amount.toFixed(2)}
                             </span>
                           </td>
                         </tr>
