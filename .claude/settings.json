@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/partial-claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npm run preview)",
+      "Bash(npm start)",
+      "Bash(npm test)",
+      "PowerShell(npm run dev)",
+      "PowerShell(npm run build)",
+      "PowerShell(npm run preview)",
+      "PowerShell(npm start)",
+      "PowerShell(npm test)"
+    ],
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(rm -rf *)",
+      "PowerShell(git push*)",
+      "PowerShell(git commit*)"
+    ]
+  }
+}

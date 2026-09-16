@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { Task, ColumnId, AppSettings } from './types';
+import { Task, ColumnId, AppSettings, TaskContext, User } from './types';
 import { 
   loadStoredTasks, 
   saveStoredTasks, 
@@ -10,6 +10,7 @@ import {
   saveStoredActiveTaskId
 } from './utils/storage';
 import { soundManager } from './utils/audio';
+import { getMeApi, logoutApi } from './utils/auth';
 import { 
   SyncStatus, 
   getStoredBoardKey, 
@@ -25,11 +26,17 @@ import { WipLimitModal } from './components/WipLimitModal';
 import { BackupModal } from './components/BackupModal';
 import { HelpShortcutsModal } from './components/HelpShortcutsModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
+import { AuthModal } from './components/AuthModal';
 
 export const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(() => loadStoredTasks());
   const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
   const [activeTaskId, setActiveTaskId] = useState<string | null>(() => loadStoredActiveTaskId());
+
+  // Segregation & User state
+  const [activeContext, setActiveContext] = useState<TaskContext | 'all'>('work');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Cloud Sync state
   const [boardKey, setBoardKey] = useState<string>(() => getStoredBoardKey());
@@ -51,6 +58,13 @@ export const App: React.FC = () => {
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastLocalEditTimeRef = useRef<number>(Date.now());
 
+  // Check authenticated user on mount
+  useEffect(() => {
+    getMeApi().then((user) => {
+      if (user) setCurrentUser(user);
+    });
+  }, []);
+
   // Sync tasks to LocalStorage
   useEffect(() => {
     saveStoredTasks(tasks);
@@ -61,6 +75,37 @@ export const App: React.FC = () => {
     saveStoredSettings(settings);
     soundManager.setEnabled(settings.soundEnabled);
   }, [settings]);
+
+  // Theme Manager: Sync system / dark / light mode to document <html> element
+  useEffect(() => {
+    const applyTheme = () => {
+      const theme = settings.theme || 'system';
+      const isDark =
+        theme === 'dark' ||
+        (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+    };
+
+    applyTheme();
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    media.addEventListener('change', applyTheme);
+    return () => media.removeEventListener('change', applyTheme);
+  }, [settings.theme]);
+
+  // Check active user session on startup
+  useEffect(() => {
+    getMeApi().then((user) => {
+      if (user) {
+        setCurrentUser(user);
+        const userBoardKey = `user_${user.id}_default`;
+        const currentKey = getStoredBoardKey();
+        if (!currentKey || currentKey === 'default') {
+          setBoardKey(userBoardKey);
+          saveStoredBoardKey(userBoardKey);
+        }
+      }
+    });
+  }, []);
 
   // Sync active task ID
   useEffect(() => {
@@ -237,6 +282,23 @@ export const App: React.FC = () => {
     saveStoredBoardKey(clean);
   };
 
+  // Auth Handlers
+  const handleAuthSuccess = (user: User) => {
+    setCurrentUser(user);
+    const userBoardKey = `user_${user.id}_default`;
+    setBoardKey(userBoardKey);
+    saveStoredBoardKey(userBoardKey);
+    syncPullFromCloud(userBoardKey, true);
+  };
+
+  const handleLogout = async () => {
+    await logoutApi();
+    setCurrentUser(null);
+    setBoardKey('default');
+    saveStoredBoardKey('default');
+    syncPullFromCloud('default', true);
+  };
+
   // ==================== TASK & APP ACTIONS ====================
   const triggerConfetti = useCallback(() => {
     if (!settings.confettiEnabled) return;
@@ -330,12 +392,14 @@ export const App: React.FC = () => {
   }, []);
 
   // Quick Add Task in Column
-  const handleQuickAddTask = useCallback((columnId: ColumnId, title: string) => {
+  const handleQuickAddTask = useCallback((columnId: ColumnId, title: string, context?: TaskContext) => {
+    const defaultCtx = context || (activeContext === 'personal' ? 'personal' : 'work');
     const newTask: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       title,
       columnId,
       priority: 'medium',
+      context: defaultCtx,
       subtasks: [],
       tags: [],
       elapsedSeconds: 0,
@@ -348,7 +412,7 @@ export const App: React.FC = () => {
     if (columnId === 'doing') {
       setActiveTaskId(newTask.id);
     }
-  }, [settings.autoStartTimerOnDoing]);
+  }, [settings.autoStartTimerOnDoing, activeContext]);
 
   // Delete Task
   const handleDeleteTask = useCallback((taskId: string) => {
@@ -371,6 +435,7 @@ export const App: React.FC = () => {
         description: taskData.description,
         columnId: taskData.columnId || 'backlog',
         priority: taskData.priority || 'medium',
+        context: taskData.context || (activeContext === 'personal' ? 'personal' : 'work'),
         subtasks: taskData.subtasks || [],
         tags: taskData.tags || [],
         elapsedSeconds: 0,
@@ -384,7 +449,7 @@ export const App: React.FC = () => {
         setActiveTaskId(newTask.id);
       }
     }
-  }, [editingTask, settings.autoStartTimerOnDoing]);
+  }, [editingTask, settings.autoStartTimerOnDoing, activeContext]);
 
   // WIP Violation Trigger
   const handleWipViolation = useCallback((task: Task) => {
@@ -417,6 +482,7 @@ export const App: React.FC = () => {
         setIsBackupModalOpen(false);
         setIsShortcutsModalOpen(false);
         setIsCloudSyncModalOpen(false);
+        setIsAuthModalOpen(false);
       }
     };
 
@@ -425,7 +491,7 @@ export const App: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col selection:bg-brand-500/30 selection:text-brand-200">
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#090a0f] text-zinc-900 dark:text-zinc-100 flex flex-col selection:bg-brand-500/30 selection:text-brand-700 dark:selection:text-brand-200 transition-colors duration-200">
       {/* Persistent Focus HUD */}
       <FocusHUD
         activeTask={activeTask}
@@ -449,6 +515,11 @@ export const App: React.FC = () => {
         }}
         settings={settings}
         onUpdateSettings={(newSettings) => setSettings((s) => ({ ...s, ...newSettings }))}
+        activeContext={activeContext}
+        onSelectContext={setActiveContext}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
       />
 
       {/* Main Kanban Board Area */}
@@ -457,6 +528,7 @@ export const App: React.FC = () => {
           tasks={tasks}
           activeTaskId={activeTask?.id || null}
           settings={settings}
+          activeContext={activeContext}
           onEditTask={(task) => {
             setEditingTask(task);
             setIsTaskModalOpen(true);
@@ -478,6 +550,7 @@ export const App: React.FC = () => {
         onSave={handleSaveTaskModal}
         initialTask={editingTask}
         defaultColumnId={defaultColumnForNew}
+        defaultContext={activeContext === 'personal' ? 'personal' : 'work'}
       />
 
       {/* WIP Guardrail Modal */}
@@ -523,6 +596,13 @@ export const App: React.FC = () => {
       <HelpShortcutsModal
         isOpen={isShortcutsModalOpen}
         onClose={() => setIsShortcutsModalOpen(false)}
+      />
+
+      {/* User Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={handleAuthSuccess}
       />
     </div>
   );

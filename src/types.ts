@@ -2,6 +2,10 @@ export type Priority = 'urgent' | 'high' | 'medium' | 'low';
 
 export type ColumnId = 'backlog' | 'today' | 'doing' | 'done';
 
+export type TaskContext = 'work' | 'personal';
+
+export type ThemeMode = 'system' | 'dark' | 'light';
+
 export interface Subtask {
   id: string;
   title: string;
@@ -14,6 +18,7 @@ export interface Task {
   description?: string;
   columnId: ColumnId;
   priority: Priority;
+  context?: TaskContext;
   subtasks: Subtask[];
   tags: string[];
   elapsedSeconds: number;
@@ -37,6 +42,7 @@ export interface BoardFilter {
   search: string;
   priority: Priority | 'all';
   tag: string | 'all';
+  context: TaskContext | 'all';
 }
 
 export interface AppSettings {
@@ -44,4 +50,11 @@ export interface AppSettings {
   soundEnabled: boolean;
   confettiEnabled: boolean;
   autoStartTimerOnDoing: boolean;
+  theme: ThemeMode;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  createdAt?: number;
 }

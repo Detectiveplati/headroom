@@ -13,7 +13,9 @@ import {
   ChevronUp, 
   GripVertical,
   CheckCircle2,
-  Calendar
+  Calendar,
+  Briefcase,
+  Home
 } from 'lucide-react';
 import { Task, ColumnId } from '../types';
 
@@ -55,13 +57,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const getPriorityStyle = (priority: string) => {
     switch (priority) {
       case 'urgent':
-        return 'bg-red-500/10 text-red-400 border-red-500/30';
+        return 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30';
       case 'high':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+        return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
       case 'medium':
-        return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+        return 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30';
       default:
-        return 'bg-zinc-800 text-zinc-400 border-zinc-700/50';
+        return 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/50';
     }
   };
 
@@ -78,23 +80,36 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       onDragStart={(e) => onDragStart(e, task.id)}
       className={`group relative rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing border select-none ${
         isFocused
-          ? 'bg-zinc-900/95 border-brand-500/70 shadow-lg shadow-brand-500/15 ring-1 ring-brand-500/40'
-          : 'bg-[#151821]/80 hover:bg-[#1a1e2a] border-zinc-800/80 hover:border-zinc-700 shadow-md'
+          ? 'bg-white dark:bg-zinc-900/95 border-brand-500/70 shadow-lg shadow-brand-500/15 ring-1 ring-brand-500/40'
+          : 'bg-white dark:bg-[#151821]/80 hover:bg-slate-50 dark:hover:bg-[#1a1e2a] border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 shadow-sm dark:shadow-md'
       }`}
     >
       <div className="p-3.5 space-y-2.5">
-        {/* Card Header: Drag handle, Priority, Focus indicator & Actions */}
+        {/* Card Header: Drag handle, Priority, Context badge & Actions */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-zinc-600 group-hover:text-zinc-400 cursor-grab">
+            <span className="text-zinc-400 dark:text-zinc-600 group-hover:text-zinc-700 dark:group-hover:text-zinc-400 cursor-grab">
               <GripVertical className="w-3.5 h-3.5" />
             </span>
             <span className={`text-[10px] uppercase font-mono font-semibold px-2 py-0.5 rounded border ${getPriorityStyle(task.priority)}`}>
               {task.priority}
             </span>
 
+            {/* Context Badge (Work vs Personal) */}
+            {task.context === 'personal' ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-600 dark:text-pink-300 border border-pink-500/20">
+                <Home className="w-2.5 h-2.5" />
+                Personal
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 border border-blue-500/20">
+                <Briefcase className="w-2.5 h-2.5" />
+                Work
+              </span>
+            )}
+
             {isFocused && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Active Focus
               </span>
@@ -141,8 +156,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {/* Title */}
         <h4 
           onClick={() => onEdit(task)}
-          className={`text-sm font-medium leading-snug cursor-pointer hover:text-brand-300 transition line-clamp-2 ${
-            task.columnId === 'done' ? 'line-through text-zinc-500' : 'text-zinc-100'
+          className={`text-sm font-medium leading-snug cursor-pointer hover:text-brand-500 dark:hover:text-brand-300 transition line-clamp-2 ${
+            task.columnId === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-zinc-100'
           }`}
         >
           {task.title}
@@ -150,7 +165,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
         {/* Optional Description snippet */}
         {task.description && (
-          <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+          <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
             {task.description}
           </p>
         )}
@@ -158,32 +173,32 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {/* Checklist Progress Bar & Toggle */}
         {totalSubtasks > 0 && (
           <div className="space-y-1.5 pt-1">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
+            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowSubtasks(!showSubtasks);
                 }}
-                className="flex items-center gap-1.5 hover:text-zinc-200 transition font-mono text-[11px]"
+                className="flex items-center gap-1.5 hover:text-zinc-900 dark:hover:text-zinc-200 transition font-mono text-[11px]"
               >
-                <CheckSquare className="w-3.5 h-3.5 text-brand-400" />
+                <CheckSquare className="w-3.5 h-3.5 text-brand-500 dark:text-brand-400" />
                 <span>{completedSubtasks}/{totalSubtasks} subtasks</span>
                 {showSubtasks ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </button>
-              <span className="font-mono text-[10px] text-zinc-500">
+              <span className="font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
                 {Math.round(progressPercent)}%
               </span>
             </div>
 
             {/* Micro progress bar */}
-            <div className="w-full bg-zinc-800/80 h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-zinc-200 dark:bg-zinc-800/80 h-1.5 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-300 rounded-full ${
                   progressPercent === 100
                     ? 'bg-emerald-500'
                     : progressPercent > 50
-                    ? 'bg-brand-400'
+                    ? 'bg-brand-500'
                     : 'bg-brand-600'
                 }`}
                 style={{ width: `${progressPercent}%` }}
@@ -192,12 +207,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
             {/* Collapsible Subtasks list */}
             {showSubtasks && (
-              <div className="pt-2 pb-1 space-y-1.5 pl-1 border-t border-zinc-800/60 mt-1">
+              <div className="pt-2 pb-1 space-y-1.5 pl-1 border-t border-zinc-200 dark:border-zinc-800/60 mt-1">
                 {task.subtasks.map((st) => (
                   <label
                     key={st.id}
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-start gap-2 text-xs text-zinc-300 hover:text-zinc-100 cursor-pointer group/st"
+                    className="flex items-start gap-2 text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 cursor-pointer group/st"
                   >
                     <input
                       type="checkbox"
@@ -231,7 +246,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {/* Card Footer: Timer info & Quick Move navigation */}
-        <div className="flex items-center justify-between pt-2 border-t border-zinc-800/60 text-xs text-zinc-500">
+        <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800/60 text-xs text-zinc-500">
           <div className="flex items-center gap-2">
             {task.columnId === 'doing' && onToggleTimer && (
               <button
@@ -240,10 +255,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   e.stopPropagation();
                   onToggleTimer(task.id);
                 }}
-                className="flex items-center gap-1 font-mono text-[11px] text-brand-300 hover:text-white bg-brand-500/20 hover:bg-brand-500/30 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
+                className="flex items-center gap-1 font-mono text-[11px] text-brand-600 dark:text-brand-300 hover:text-brand-800 dark:hover:text-white bg-brand-500/15 hover:bg-brand-500/25 px-1.5 py-0.5 rounded border border-brand-500/30 transition"
                 title={task.isRunning ? "Pause timer" : "Start timer"}
               >
-                {task.isRunning ? <Pause className="w-2.5 h-2.5 text-amber-400" /> : <Play className="w-2.5 h-2.5 text-emerald-400 fill-emerald-400" />}
+                {task.isRunning ? <Pause className="w-2.5 h-2.5 text-amber-500" /> : <Play className="w-2.5 h-2.5 text-emerald-500 fill-emerald-500" />}
                 <span>{formatElapsed(task.elapsedSeconds)}</span>
               </button>
             )}

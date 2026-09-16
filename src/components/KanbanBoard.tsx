@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { Search, X } from 'lucide-react';
-import { Task, Column, ColumnId, Priority, BoardFilter, AppSettings } from '../types';
+import { Task, Column, ColumnId, Priority, BoardFilter, AppSettings, TaskContext } from '../types';
 import { KanbanColumn } from './KanbanColumn';
 
 interface KanbanBoardProps {
   tasks: Task[];
   activeTaskId: string | null;
   settings: AppSettings;
+  activeContext: TaskContext | 'all';
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onMoveTask: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
-  onQuickAddTask: (columnId: ColumnId, title: string) => void;
+  onQuickAddTask: (columnId: ColumnId, title: string, context?: TaskContext) => void;
   onToggleTimer: (taskId: string) => void;
   onFocusTask: (taskId: string) => void;
   onWipViolation: (task: Task) => void;
@@ -21,6 +22,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   tasks,
   activeTaskId,
   settings,
+  activeContext,
   onEditTask,
   onDeleteTask,
   onMoveTask,
@@ -35,6 +37,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     search: '',
     priority: 'all',
     tag: 'all',
+    context: 'all',
   });
 
   const columns: Column[] = [
@@ -78,6 +81,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   // Filter tasks
   const filteredTasks = tasks.filter((task) => {
+    // Work vs Personal segregation
+    if (activeContext !== 'all') {
+      const taskContext = task.context || 'work';
+      if (taskContext !== activeContext) return false;
+    }
+
     // Search query
     if (filter.search.trim()) {
       const q = filter.search.toLowerCase();
@@ -134,21 +143,21 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   return (
     <div className="flex-1 flex flex-col max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4">
       {/* Search & Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900/40 p-2.5 rounded-2xl border border-zinc-800/80 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white/80 dark:bg-zinc-900/40 p-2.5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 backdrop-blur-sm shadow-sm dark:shadow-none">
         <div className="flex items-center gap-2 flex-1 min-w-[220px]">
           <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Filter tasks by name, notes, or tags..."
               value={filter.search}
               onChange={(e) => setFilter((f) => ({ ...f, search: e.target.value }))}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-950/60 border border-zinc-800/80 rounded-xl text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-100/80 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80 rounded-xl text-zinc-900 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
             {filter.search && (
               <button
                 onClick={() => setFilter((f) => ({ ...f, search: '' }))}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -158,15 +167,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
         {/* Priority Filter Pills */}
         <div className="flex items-center gap-1 overflow-x-auto text-xs">
-          <span className="text-[11px] text-zinc-500 mr-1 hidden sm:inline">Priority:</span>
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 mr-1 hidden sm:inline">Priority:</span>
           {(['all', 'urgent', 'high', 'medium', 'low'] as (Priority | 'all')[]).map((p) => (
             <button
               key={p}
               onClick={() => setFilter((f) => ({ ...f, priority: p }))}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-mono capitalize transition ${
                 filter.priority === p
-                  ? 'bg-brand-500/20 text-brand-300 border border-brand-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                  ? 'bg-brand-500/20 text-brand-600 dark:text-brand-300 border border-brand-500/40 font-semibold'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
               }`}
             >
               {p}
@@ -180,7 +189,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             <select
               value={filter.tag}
               onChange={(e) => setFilter((f) => ({ ...f, tag: e.target.value }))}
-              className="text-xs bg-zinc-950/60 border border-zinc-800/80 rounded-lg px-2.5 py-1 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="text-xs bg-zinc-100/80 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80 rounded-lg px-2.5 py-1 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option value="all">All Tags</option>
               {allTags.map((tag) => (
@@ -194,8 +203,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
         {isFiltered && (
           <button
-            onClick={() => setFilter({ search: '', priority: 'all', tag: 'all' })}
-            className="text-[11px] text-brand-400 hover:text-brand-300 flex items-center gap-1 ml-auto"
+            onClick={() => setFilter({ search: '', priority: 'all', tag: 'all', context: 'all' })}
+            className="text-[11px] text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 flex items-center gap-1 ml-auto"
           >
             <X className="w-3 h-3" />
             <span>Reset filters</span>
@@ -228,7 +237,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onMoveTask(taskId, targetCol);
             }}
             onToggleSubtask={onToggleSubtask}
-            onQuickAddTask={onQuickAddTask}
+            onQuickAddTask={(colId, title) => {
+              const defaultCtx = activeContext === 'personal' ? 'personal' : 'work';
+              onQuickAddTask(colId, title, defaultCtx);
+            }}
             onToggleTimer={onToggleTimer}
             onFocusTask={onFocusTask}
             onDragStart={handleDragStart}

@@ -2,7 +2,14 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getBoard, saveBoard } from './server/db.js';
+import { 
+  getBoard, 
+  saveBoard, 
+  registerUser, 
+  loginUser, 
+  getUserByToken, 
+  deleteSession 
+} from './server/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +32,7 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
   '.webp': 'image/webp',
+  '.webmanifest': 'application/manifest+json',
 };
 
 // Helper to send JSON response with CORS
@@ -44,7 +52,6 @@ function parseBody(req) {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk.toString();
-      // Guard against payloads larger than 5MB
       if (body.length > 5 * 1024 * 1024) {
         reject(new Error('Payload too large'));
       }
@@ -52,12 +59,20 @@ function parseBody(req) {
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {});
-      } catch (err) {
+      } catch {
         reject(new Error('Invalid JSON format'));
       }
     });
     req.on('error', reject);
   });
+}
+
+function getAuthToken(req) {
+  const header = req.headers.authorization || '';
+  if (header.toLowerCase().startsWith('bearer ')) {
+    return header.slice(7).trim();
+  }
+  return null;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -84,9 +99,62 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 2. GET /api/board
+      // 2. Auth: Register
+      if (pathname === '/api/auth/register' && req.method === 'POST') {
+        const { username, password } = await parseBody(req);
+        try {
+          const result = await registerUser(username, password);
+          sendJson(res, 201, { success: true, ...result });
+        } catch (authErr) {
+          sendJson(res, 400, { success: false, error: authErr.message });
+        }
+        return;
+      }
+
+      // 3. Auth: Login
+      if (pathname === '/api/auth/login' && req.method === 'POST') {
+        const { username, password } = await parseBody(req);
+        try {
+          const result = await loginUser(username, password);
+          sendJson(res, 200, { success: true, ...result });
+        } catch (authErr) {
+          sendJson(res, 401, { success: false, error: authErr.message });
+        }
+        return;
+      }
+
+      // 4. Auth: Get Current User
+      if (pathname === '/api/auth/me' && req.method === 'GET') {
+        const token = getAuthToken(req);
+        const user = await getUserByToken(token);
+        if (!user) {
+          sendJson(res, 401, { success: false, error: 'Unauthorized' });
+          return;
+        }
+        sendJson(res, 200, { success: true, user });
+        return;
+      }
+
+      // 5. Auth: Logout
+      if (pathname === '/api/auth/logout' && req.method === 'POST') {
+        const token = getAuthToken(req);
+        if (token) {
+          await deleteSession(token);
+        }
+        sendJson(res, 200, { success: true });
+        return;
+      }
+
+      // 6. GET /api/board
       if (pathname === '/api/board' && req.method === 'GET') {
-        const boardKey = (reqUrl.searchParams.get('key') || 'default').trim();
+        const token = getAuthToken(req);
+        const user = await getUserByToken(token);
+
+        let boardKey = (reqUrl.searchParams.get('key') || '').trim();
+        if (!boardKey) {
+          boardKey = user ? `user_${user.id}_default` : 'default';
+        }
+
         const board = await getBoard(boardKey);
         if (!board) {
           sendJson(res, 200, { found: false, boardKey, data: null });
@@ -96,17 +164,22 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // 3. POST /api/board
+      // 7. POST /api/board
       if (pathname === '/api/board' && req.method === 'POST') {
-        const boardKey = (reqUrl.searchParams.get('key') || 'default').trim();
+        const token = getAuthToken(req);
+        const user = await getUserByToken(token);
+
+        let boardKey = (reqUrl.searchParams.get('key') || '').trim();
+        if (!boardKey) {
+          boardKey = user ? `user_${user.id}_default` : 'default';
+        }
+
         const payload = await parseBody(req);
         const { tasks, settings, activeTaskId, updatedAt = Date.now(), force = false } = payload;
 
-        // Check for conflicts if not force
         if (!force) {
           const existing = await getBoard(boardKey);
           if (existing && existing.updatedAt && existing.updatedAt > updatedAt) {
-            // Server has newer edits
             sendJson(res, 409, {
               conflict: true,
               message: 'Server has newer updates',
@@ -127,7 +200,6 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Unknown API route
       sendJson(res, 404, { error: 'API route not found' });
       return;
     } catch (apiErr) {
@@ -145,7 +217,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Check if target file exists
   fs.stat(safePath, (err, stats) => {
     let targetFile = safePath;
     let isSpaFallback = false;

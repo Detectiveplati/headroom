@@ -1,4 +1,5 @@
 import { Task, AppSettings } from '../types';
+import { getStoredAuthToken } from './auth';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
 
@@ -22,15 +23,15 @@ export interface SyncResult {
 
 export function getStoredBoardKey(): string {
   try {
-    return (localStorage.getItem(STORAGE_KEY_BOARD_KEY) || 'default').trim();
+    return (localStorage.getItem(STORAGE_KEY_BOARD_KEY) || '').trim();
   } catch {
-    return 'default';
+    return '';
   }
 }
 
 export function saveStoredBoardKey(key: string): void {
   try {
-    localStorage.setItem(STORAGE_KEY_BOARD_KEY, key.trim() || 'default');
+    localStorage.setItem(STORAGE_KEY_BOARD_KEY, key.trim());
   } catch (e) {
     console.error('Failed to save board key', e);
   }
@@ -56,15 +57,21 @@ export function saveStoredLastSynced(timestamp: number): void {
 /**
  * Fetch board state from the cloud API
  */
-export async function pullBoardFromCloud(boardKey: string = 'default'): Promise<SyncResult> {
+export async function pullBoardFromCloud(boardKey: string = ''): Promise<SyncResult> {
   try {
-    const targetKey = encodeURIComponent(boardKey || 'default');
+    const targetKey = encodeURIComponent(boardKey || '');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
+    const token = getStoredAuthToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`/api/board?key=${targetKey}`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -116,9 +123,15 @@ export async function pushBoardToCloud(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
+    const token = getStoredAuthToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`/api/board?key=${targetKey}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
       signal: controller.signal,
     });

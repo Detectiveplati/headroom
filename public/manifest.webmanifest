@@ -1,0 +1,16 @@
+{
+  "short_name": "Headroom",
+  "name": "Headroom - Focus Kanban & Flow HUD",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='128' fill='%23090a0f'/%3E%3Ccircle cx='256' cy='256' r='180' fill='none' stroke='%235e6ad2' stroke-width='32'/%3E%3Ccircle cx='256' cy='256' r='110' fill='none' stroke='%2338bdf8' stroke-width='24'/%3E%3Ccircle cx='256' cy='256' r='45' fill='%235e6ad2'/%3E%3C/svg%3E",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#090a0f",
+  "theme_color": "#090a0f",
+  "display": "standalone",
+  "orientation": "any"
+}
