@@ -60,12 +60,27 @@ Open your browser to:
 - **Styling**: Tailwind CSS (Linear/Raycast dark theme)
 - **Icons**: Lucide React
 - **Celebration**: Canvas-Confetti + Web Audio API synthesizer
-- **Storage**: LocalStorage with schema versioning + JSON export/import
+- **Storage & Cloud**: Local-First (`localStorage`) + Railway PostgreSQL (or local atomic JSON store)
+- **Deployment**: Zero-config Railway deployment (`server.js` + `railway.json`)
+
+---
+
+## ☁️ Multi-Device Cloud Synchronization
+
+Headroom features a **local-first architecture**:
+1. **Instant Offline Startup**: Your board always renders immediately from local cache.
+2. **Background Sync**: Changes automatically push to `/api/board` in the background.
+3. **Multi-Device Support**: Open Headroom on your phone, laptop, or desktop. When you focus a window or switch tabs, it pulls any remote updates made from other devices!
+4. **Private Board Keys**: Click the Cloud Sync indicator in the top Focus HUD to configure an optional **Private Board Key** (e.g. `my-deepwork-board`) so your board remains private to only devices that share the key.
+5. **Database on Railway**:
+   - On Railway, simply click **New → Database → Add PostgreSQL**. Railway injects `DATABASE_URL` and Headroom automatically provisions the `boards` table and persists all updates permanently across redeployments.
+   - For local development, it defaults to a local JSON file (`data/boards.json`) with zero setup.
 
 ---
 
 ## 📦 Scripts
 
-- `npm run dev`: Launch local Vite dev server on port 3000
+- `npm run dev`: Launch local Vite dev server on port 3000 (with built-in sync API plugin)
 - `npm run build`: Type-check with `tsc` and produce an optimized production bundle in `/dist`
+- `npm start`: Launch the production Node.js server (`server.js`) on `$PORT` with REST API & SPA fallback
 - `npm run preview`: Preview the production build locally

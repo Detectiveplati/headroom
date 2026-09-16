@@ -11,13 +11,19 @@ import {
   VolumeX, 
   FileDown, 
   Keyboard,
-  AlertTriangle
+  AlertTriangle,
+  Cloud,
+  CloudOff,
+  RefreshCw
 } from 'lucide-react';
 import { Task, AppSettings } from '../types';
+import { SyncStatus } from '../utils/sync';
 
 interface FocusHUDProps {
   activeTask: Task | null;
   doingTasks: Task[];
+  syncStatus: SyncStatus;
+  onOpenSyncModal: () => void;
   onSelectActiveTask: (taskId: string) => void;
   onToggleTimer: (taskId: string) => void;
   onResetTimer: (taskId: string) => void;
@@ -33,6 +39,8 @@ interface FocusHUDProps {
 export const FocusHUD: React.FC<FocusHUDProps> = ({
   activeTask,
   doingTasks,
+  syncStatus,
+  onOpenSyncModal,
   onSelectActiveTask,
   onToggleTimer,
   onResetTimer,
@@ -125,6 +133,25 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             <span className="font-mono font-semibold">{wipCount}/{settings.wipLimit}</span>
             {isWipAtCapacity && <span className="text-[10px] text-amber-400 uppercase tracking-wider font-bold">FULL</span>}
           </div>
+
+          {/* Cloud Sync Status Indicator */}
+          <button
+            type="button"
+            onClick={onOpenSyncModal}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+              syncStatus === 'synced'
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                : syncStatus === 'syncing'
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                : 'bg-zinc-800/60 text-zinc-400 border-zinc-700/60 hover:bg-zinc-800'
+            }`}
+            title={`Cloud Sync: ${syncStatus}. Click to manage private board key or sync.`}
+          >
+            {syncStatus === 'synced' && <Cloud className="w-3 h-3 text-emerald-400" />}
+            {syncStatus === 'syncing' && <RefreshCw className="w-3 h-3 text-amber-400 animate-spin" />}
+            {syncStatus !== 'synced' && syncStatus !== 'syncing' && <CloudOff className="w-3 h-3 text-zinc-500" />}
+            <span className="hidden sm:inline font-mono text-[11px] capitalize">{syncStatus}</span>
+          </button>
         </div>
 
         {/* Center: Primary Focus HUD */}

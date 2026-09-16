@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { Task, ColumnId, AppSettings } from './types';
 import { 
@@ -10,17 +10,32 @@ import {
   saveStoredActiveTaskId
 } from './utils/storage';
 import { soundManager } from './utils/audio';
+import { 
+  SyncStatus, 
+  getStoredBoardKey, 
+  saveStoredBoardKey, 
+  getStoredLastSynced, 
+  pullBoardFromCloud, 
+  pushBoardToCloud 
+} from './utils/sync';
 import { FocusHUD } from './components/FocusHUD';
 import { KanbanBoard } from './components/KanbanBoard';
 import { TaskModal } from './components/TaskModal';
 import { WipLimitModal } from './components/WipLimitModal';
 import { BackupModal } from './components/BackupModal';
 import { HelpShortcutsModal } from './components/HelpShortcutsModal';
+import { CloudSyncModal } from './components/CloudSyncModal';
 
 export const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(() => loadStoredTasks());
   const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
   const [activeTaskId, setActiveTaskId] = useState<string | null>(() => loadStoredActiveTaskId());
+
+  // Cloud Sync state
+  const [boardKey, setBoardKey] = useState<string>(() => getStoredBoardKey());
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
+  const [lastSynced, setLastSynced] = useState<number | null>(() => getStoredLastSynced());
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -29,6 +44,12 @@ export const App: React.FC = () => {
   const [wipViolationTask, setWipViolationTask] = useState<Task | null>(null);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+
+  // Synchronization refs to prevent circular pushes
+  const isSyncingFromRemoteRef = useRef(false);
+  const isInitialLoadRef = useRef(true);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLocalEditTimeRef = useRef<number>(Date.now());
 
   // Sync tasks to LocalStorage
   useEffect(() => {
@@ -79,7 +100,144 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Confetti helper
+  // ==================== CLOUD SYNC LOGIC ====================
+  // Pull latest updates from cloud
+  const syncPullFromCloud = useCallback(async (key: string, isManual = false) => {
+    setSyncStatus('syncing');
+    const result = await pullBoardFromCloud(key);
+
+    if (result.success) {
+      setSyncStatus('synced');
+      setLastSynced(Date.now());
+
+      if (result.data) {
+        // If remote has data
+        const remoteTime = result.data.updatedAt || 0;
+        if (remoteTime > lastLocalEditTimeRef.current || isManual) {
+          isSyncingFromRemoteRef.current = true;
+          if (Array.isArray(result.data.tasks)) {
+            setTasks(result.data.tasks);
+          }
+          if (result.data.settings) {
+            setSettings(result.data.settings);
+          }
+          if (result.data.activeTaskId !== undefined) {
+            setActiveTaskId(result.data.activeTaskId);
+          }
+          lastLocalEditTimeRef.current = remoteTime;
+          setTimeout(() => {
+            isSyncingFromRemoteRef.current = false;
+          }, 300);
+        }
+      } else {
+        // First time initializing this board on cloud: push current local state!
+        pushBoardToCloud(key, {
+          tasks,
+          settings,
+          activeTaskId,
+          updatedAt: Date.now(),
+        });
+      }
+    } else {
+      setSyncStatus(result.status);
+    }
+  }, [tasks, settings, activeTaskId]);
+
+  // Initial mount sync
+  useEffect(() => {
+    syncPullFromCloud(boardKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardKey]);
+
+  // Pull on window focus / tab visibility change (sync when switching back from phone/laptop)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncPullFromCloud(boardKey);
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [boardKey, syncPullFromCloud]);
+
+  // Push local changes to cloud (debounced)
+  useEffect(() => {
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      return;
+    }
+    if (isSyncingFromRemoteRef.current) {
+      return;
+    }
+
+    lastLocalEditTimeRef.current = Date.now();
+    setSyncStatus('syncing');
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      const res = await pushBoardToCloud(boardKey, {
+        tasks,
+        settings,
+        activeTaskId,
+        updatedAt: lastLocalEditTimeRef.current,
+      });
+
+      if (res.success) {
+        setSyncStatus('synced');
+        setLastSynced(Date.now());
+      } else if (res.conflict && res.data) {
+        // Server has newer updates
+        isSyncingFromRemoteRef.current = true;
+        setTasks(res.data.tasks || []);
+        if (res.data.settings) setSettings(res.data.settings);
+        if (res.data.activeTaskId !== undefined) setActiveTaskId(res.data.activeTaskId);
+        setSyncStatus('synced');
+        setTimeout(() => {
+          isSyncingFromRemoteRef.current = false;
+        }, 300);
+      } else {
+        setSyncStatus(res.status);
+      }
+    }, 600);
+
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
+  }, [tasks, settings, activeTaskId, boardKey]);
+
+  // Manual Force Push
+  const handleForcePush = async () => {
+    setSyncStatus('syncing');
+    const res = await pushBoardToCloud(boardKey, {
+      tasks,
+      settings,
+      activeTaskId,
+      updatedAt: Date.now(),
+      force: true,
+    });
+    if (res.success) {
+      setSyncStatus('synced');
+      setLastSynced(Date.now());
+    } else {
+      setSyncStatus(res.status);
+    }
+  };
+
+  // Switch Board Key
+  const handleUpdateBoardKey = (newKey: string) => {
+    const clean = newKey.trim() || 'default';
+    setBoardKey(clean);
+    saveStoredBoardKey(clean);
+  };
+
+  // ==================== TASK & APP ACTIONS ====================
   const triggerConfetti = useCallback(() => {
     if (!settings.confettiEnabled) return;
     confetti({
@@ -203,12 +361,10 @@ export const App: React.FC = () => {
   // Save / Edit Task from Modal
   const handleSaveTaskModal = useCallback((taskData: Partial<Task>) => {
     if (editingTask) {
-      // Edit existing
       setTasks((prev) =>
         prev.map((t) => (t.id === editingTask.id ? { ...t, ...taskData } : t))
       );
     } else {
-      // Create new
       const newTask: Task = {
         id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         title: taskData.title || 'Untitled Task',
@@ -239,7 +395,6 @@ export const App: React.FC = () => {
   // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in input or textarea
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
@@ -261,6 +416,7 @@ export const App: React.FC = () => {
         setWipViolationTask(null);
         setIsBackupModalOpen(false);
         setIsShortcutsModalOpen(false);
+        setIsCloudSyncModalOpen(false);
       }
     };
 
@@ -274,6 +430,8 @@ export const App: React.FC = () => {
       <FocusHUD
         activeTask={activeTask}
         doingTasks={doingTasks}
+        syncStatus={syncStatus}
+        onOpenSyncModal={() => setIsCloudSyncModalOpen(true)}
         onSelectActiveTask={(taskId) => setActiveTaskId(taskId)}
         onToggleTimer={handleToggleTimer}
         onResetTimer={handleResetTimer}
@@ -335,6 +493,18 @@ export const App: React.FC = () => {
           handleMoveTask(task.id, 'doing');
           setWipViolationTask(null);
         }}
+      />
+
+      {/* Cloud Synchronization Modal */}
+      <CloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        syncStatus={syncStatus}
+        currentBoardKey={boardKey}
+        lastSyncedTimestamp={lastSynced}
+        onUpdateBoardKey={handleUpdateBoardKey}
+        onForcePull={() => syncPullFromCloud(boardKey, true)}
+        onForcePush={handleForcePush}
       />
 
       {/* Backup & Sync Modal */}
