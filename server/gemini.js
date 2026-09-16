@@ -16,6 +16,9 @@ export const EXPENSE_CATEGORIES = [
   'Uncategorized',
 ];
 
+// Gemini 2.0 Flash-Lite was shut down on June 1, 2026.
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+
 export async function parseStatementWithGemini({ fileBase64, mimeType, fileName }) {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
 
@@ -113,7 +116,7 @@ Also extract:
     },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -264,7 +267,7 @@ ${JSON.stringify(uniqueList, null, 2)}`;
     },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
     method: 'POST',
