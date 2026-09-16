@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   CreditCard, 
   UploadCloud, 
   Plus, 
   Search, 
   Calendar, 
+  ChevronLeft,
+  ChevronRight,
   Trash2, 
   Check, 
   Sparkles, 
@@ -34,7 +36,8 @@ import {
 import { CsvImportModal, StatementUploadContext } from './CsvImportModal';
 import { BalanceSheetOverview } from './BalanceSheetOverview';
 import { StatementHistoryModal } from './StatementHistoryModal';
-import { getTransactionTypeForCategory } from '../../utils/csvParser';
+import { getTransactionTypeForCategory, isIncomingMoneyDescription } from '../../utils/csvParser';
+import { OfficeClaimReimbursementMethod } from '../../types';
 import { getManualCategoryRulePattern } from '../../utils/manualCategoryRule';
 
 interface ExpenseDashboardProps {
@@ -55,6 +58,8 @@ interface ExpenseDashboardProps {
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
   'Salary & Income',
+  'Money In',
+  'Office Claims',
   'Food & Dining',
   'Groceries',
   'Transport & Petrol',
@@ -86,7 +91,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'all'>('all');
   const [selectedType, setSelectedType] = useState<TransactionType | 'all'>('all');
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [selectedAccountId, setSelectedAccountId] = useState<string | 'all'>('all');
 
   // Modals state
@@ -95,6 +100,21 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   const [importTargetAccountId, setImportTargetAccountId] = useState<string | undefined>(undefined);
   const [isAddTxModalOpen, setIsAddTxModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+
+  // Migrate older imports that treated incoming person-to-person deposits as refunds.
+  // This runs once per matching transaction because the update changes its type.
+  useEffect(() => {
+    const needsMoneyInMigration = transactions.some(
+      (transaction) => transaction.type === 'refund' && isIncomingMoneyDescription(transaction.rawDescription)
+    );
+    if (!needsMoneyInMigration) return;
+
+    onUpdateTransactions((previous) => previous.map((transaction) => (
+      transaction.type === 'refund' && isIncomingMoneyDescription(transaction.rawDescription)
+        ? { ...transaction, category: 'Money In', type: 'income', reviewed: false }
+        : transaction
+    )));
+  }, [transactions, onUpdateTransactions]);
 
   // New Transaction Form State
   const [newTxDate, setNewTxDate] = useState(new Date().toISOString().slice(0, 10));
@@ -114,13 +134,57 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     return Array.from(months).sort().reverse();
   }, [transactions]);
 
+  // Choose the newest imported month once data arrives; afterwards the period is always explicit.
+  useEffect(() => {
+    if (!selectedMonth && availableMonths[0]) {
+      setSelectedMonth(availableMonths[0]);
+    }
+  }, [availableMonths, selectedMonth]);
+
+  const summaryMonth = selectedMonth || new Date().toISOString().slice(0, 7);
+  const reportingPeriod = useMemo(() => {
+    const [year, month] = summaryMonth.split('-').map(Number);
+    const monthStart = new Date(year, month - 1, 1);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const isCurrent = summaryMonth === currentMonth;
+    const formatter = new Intl.DateTimeFormat('en-SG', { month: 'long', year: 'numeric' });
+    const shortFormatter = new Intl.DateTimeFormat('en-SG', { day: 'numeric', month: 'short' });
+    const daysElapsed = isCurrent ? Math.min(new Date().getDate(), daysInMonth) : daysInMonth;
+
+    return {
+      label: formatter.format(monthStart),
+      range: isCurrent
+        ? `1–${daysElapsed} ${shortFormatter.format(monthStart)} · ${daysElapsed} of ${daysInMonth} days elapsed`
+        : `1–${daysInMonth} ${shortFormatter.format(monthStart)} · Complete month`,
+      isCurrent,
+    };
+  }, [summaryMonth]);
+
+  const reportingMonthOptions = useMemo(
+    () => Array.from(new Set([summaryMonth, ...availableMonths])).sort().reverse(),
+    [summaryMonth, availableMonths]
+  );
+
+  const shiftReportingMonth = (offset: number) => {
+    const [year, month] = summaryMonth.split('-').map(Number);
+    const nextMonth = new Date(year, month - 1 + offset, 1);
+    setSelectedMonth(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`);
+  };
+
+  const formatReportingMonth = (monthKey: string) => {
+    const [year, month] = monthKey.split('-').map(Number);
+    return new Intl.DateTimeFormat('en-SG', { month: 'long', year: 'numeric' })
+      .format(new Date(year, month - 1, 1));
+  };
+
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       if (selectedAccountId !== 'all' && tx.accountId !== selectedAccountId) return false;
       if (selectedCategory !== 'all' && tx.category !== selectedCategory) return false;
       if (selectedType !== 'all' && tx.type !== selectedType) return false;
-      if (selectedMonth !== 'all' && (!tx.date || !tx.date.startsWith(selectedMonth))) return false;
+      if (!tx.date || !tx.date.startsWith(summaryMonth)) return false;
 
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -136,10 +200,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       const categoryPriority = Number(b.category === 'Uncategorized') - Number(a.category === 'Uncategorized');
       return categoryPriority || b.createdAt - a.createdAt;
     });
-  }, [transactions, selectedAccountId, selectedCategory, selectedType, selectedMonth, searchQuery]);
-
-  // Keep dashboard guidance anchored to one calendar month, even when the ledger shows all history.
-  const summaryMonth = selectedMonth === 'all' ? new Date().toISOString().slice(0, 7) : selectedMonth;
+  }, [transactions, selectedAccountId, selectedCategory, selectedType, summaryMonth, searchQuery]);
 
   // Aggregate stats for the visible account and dashboard month.
   const stats = useMemo(() => {
@@ -171,6 +232,8 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     // Spend by category
     const categorySpend: Record<ExpenseCategory, number> = {
       'Salary & Income': 0,
+      'Money In': 0,
+      'Office Claims': 0,
       'Food & Dining': 0,
       'Groceries': 0,
       'Transport & Petrol': 0,
@@ -192,7 +255,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     });
 
     const topSpendingCategory = (Object.entries(categorySpend) as [ExpenseCategory, number][])
-      .filter(([category]) => category !== 'Salary & Income' && category !== 'Transfer / Payment' && category !== 'PayNow Transfers')
+      .filter(([category]) => category !== 'Salary & Income' && category !== 'Money In' && category !== 'Transfer / Payment' && category !== 'PayNow Transfers')
       .reduce<{ category: ExpenseCategory; amount: number } | null>(
         (top, [category, amount]) => amount > (top?.amount ?? 0) ? { category, amount } : top,
         null
@@ -241,6 +304,10 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     switch (category) {
       case 'Salary & Income':
         return <Wallet className="w-3.5 h-3.5 text-emerald-500" />;
+      case 'Money In':
+        return <Wallet className="w-3.5 h-3.5 text-cyan-500" />;
+      case 'Office Claims':
+        return <FileText className="w-3.5 h-3.5 text-sky-500" />;
       case 'Food & Dining':
         return <Utensils className="w-3.5 h-3.5 text-amber-500" />;
       case 'Groceries':
@@ -348,7 +415,15 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
   const handleInlineCategoryChange = (txId: string, merchant: string, newCat: ExpenseCategory) => {
     onUpdateTransactions((prev) =>
       prev.map((t) => t.id === txId
-        ? { ...t, category: newCat, type: getTransactionTypeForCategory(newCat, t.type), reviewed: true }
+        ? {
+            ...t,
+            category: newCat,
+            type: getTransactionTypeForCategory(newCat, t.type),
+            reimbursementMethod: newCat === 'Office Claims'
+              ? (t.type === 'refund' ? 'account' : t.reimbursementMethod || 'pending')
+              : undefined,
+            reviewed: true,
+          }
         : t)
     );
 
@@ -356,6 +431,14 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
     if (rulePattern) {
       onSaveRule(rulePattern, newCat);
     }
+  };
+
+  const handleOfficeClaimReimbursement = (txId: string, method: OfficeClaimReimbursementMethod) => {
+    onUpdateTransactions((prev) => prev.map((transaction) => (
+      transaction.id === txId
+        ? { ...transaction, reimbursementMethod: method, reviewed: true }
+        : transaction
+    )));
   };
 
   const handleDeleteTx = (id: string) => {
@@ -400,6 +483,9 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
       amount: amountNum,
       type: newTxType,
       category: newTxCategory,
+      reimbursementMethod: newTxCategory === 'Office Claims'
+        ? (newTxType === 'refund' ? 'account' : 'pending')
+        : undefined,
       reviewed: true,
       createdAt: Date.now(),
     };
@@ -451,27 +537,45 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
             Cognitive expense tracking, pace forecasting, and automatic bank statement normalization.
           </p>
+
+          <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-2xl border border-brand-500/30 bg-brand-500/5 px-2 py-1.5 text-left shadow-sm">
+            <Calendar className="ml-1 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" />
+            <span className="hidden text-[10px] font-semibold uppercase tracking-wider text-zinc-500 sm:inline">Reporting period</span>
+            <button
+              onClick={() => shiftReportingMonth(-1)}
+              className="rounded-lg p-1 text-zinc-500 transition hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-300"
+              title="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="min-w-0">
+              <select
+                aria-label="Reporting month"
+                value={summaryMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                className="max-w-[170px] cursor-pointer appearance-none bg-transparent pr-1 text-sm font-bold text-zinc-900 outline-none dark:text-zinc-100"
+              >
+                {reportingMonthOptions.map((month) => (
+                  <option key={month} value={month}>{formatReportingMonth(month)}</option>
+                ))}
+              </select>
+              <p className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">{reportingPeriod.range}</p>
+            </div>
+            <button
+              onClick={() => shiftReportingMonth(1)}
+              className="rounded-lg p-1 text-zinc-500 transition hover:bg-brand-500/10 hover:text-brand-700 dark:hover:text-brand-300"
+              title="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            {reportingPeriod.isCurrent && (
+              <span className="mr-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Current</span>
+            )}
+          </div>
         </div>
 
         {/* Header Actions */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Month Selector */}
-          <div className="flex items-center gap-1 bg-offwhite-surface dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-800 rounded-xl px-2.5 py-1 text-xs font-medium">
-            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-zinc-800 dark:text-zinc-200 focus:outline-none text-xs cursor-pointer"
-            >
-              <option value="all">All Months</option>
-              {availableMonths.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Import Statement */}
           <button
             onClick={() => setIsImportModalOpen(true)}
@@ -614,7 +718,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Layers className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-            Category Budget Breakdown
+            {reportingPeriod.label} Category Budgets
           </h2>
           <button
             onClick={() => setIsBudgetModalOpen(true)}
@@ -675,6 +779,12 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
 
       {/* Filter and Ledger Header Toolbar */}
       <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            Transactions <span className="font-normal text-zinc-500 dark:text-zinc-400">· {reportingPeriod.label}</span>
+          </h2>
+          <span className="text-[11px] text-zinc-500">{filteredTransactions.length} shown</span>
+        </div>
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           {/* Search bar */}
           <div className="relative w-full md:w-80">
@@ -689,7 +799,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
           </div>
 
           {/* Type Filter Pills */}
-          <div className="flex items-center gap-1 bg-offwhite-subtle dark:bg-zinc-900 p-1 rounded-xl border border-zinc-300/80 dark:border-zinc-800 text-xs self-start md:self-auto">
+          <div className="flex flex-wrap items-center gap-1 bg-offwhite-subtle dark:bg-zinc-900 p-1 rounded-xl border border-zinc-300/80 dark:border-zinc-800 text-xs self-start md:self-auto">
             <button
               onClick={() => setSelectedType('all')}
               className={`px-2.5 py-1 rounded-lg transition font-medium ${
@@ -721,14 +831,31 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
               Refunds
             </button>
             <button
-              onClick={() => setSelectedType('income')}
+              onClick={() => {
+                setSelectedCategory('all');
+                setSelectedType('income');
+              }}
               className={`px-2.5 py-1 rounded-lg transition font-medium ${
-                selectedType === 'income'
+                selectedType === 'income' && selectedCategory === 'all'
                   ? 'bg-brand-600 text-white shadow-sm'
                   : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              Income
+              All Income
+            </button>
+            <button
+              onClick={() => {
+                setSelectedCategory('Money In');
+                setSelectedType('income');
+              }}
+              className={`px-2.5 py-1 rounded-lg transition font-medium ${
+                selectedType === 'income' && selectedCategory === 'Money In'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+              title="Incoming transfers and deposits that are not shop refunds"
+            >
+              Other Money In
             </button>
             <button
               onClick={() => setSelectedType('transfer')}
@@ -862,6 +989,26 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
                           </option>
                         ))}
                       </select>
+                      {tx.category === 'Office Claims' && (
+                        tx.type === 'refund' ? (
+                          <div className="mt-1 text-[10px] font-medium text-teal-600 dark:text-teal-400">
+                            Refunded to account
+                          </div>
+                        ) : tx.type === 'expense' ? (
+                          <select
+                            value={tx.reimbursementMethod || 'pending'}
+                            onChange={(event) => handleOfficeClaimReimbursement(
+                              tx.id,
+                              event.target.value as OfficeClaimReimbursementMethod
+                            )}
+                            className="mt-1 max-w-full text-[10px] py-0.5 px-1.5 rounded-md border border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-300 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                            title="Cash reimbursement does not appear in this bank account, so the debit remains in expenditure."
+                          >
+                            <option value="pending">Awaiting reimbursement</option>
+                            <option value="cash">Reimbursed in cash · keep debit</option>
+                          </select>
+                        ) : null
+                      )}
                     </td>
 
                     {/* Payment Type */}
@@ -954,7 +1101,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         categoryRules={categoryRules}
         accounts={accounts}
         defaultAccountId={importTargetAccountId}
-        defaultMonth={selectedMonth !== 'all' ? selectedMonth : undefined}
+        defaultMonth={summaryMonth}
         onSaveRule={onSaveRule}
         onSaveRulesBatch={onSaveRulesBatch}
       />

@@ -191,9 +191,19 @@ export function getTransactionTypeForCategory(
   category: ExpenseCategory,
   currentType: TransactionType
 ): TransactionType {
-  if (category === 'Salary & Income') return 'income';
+  if (category === 'Salary & Income' || category === 'Money In') return 'income';
   if (category === 'Transfer / Payment' || category === 'PayNow Transfers') return 'transfer';
   return currentType;
+}
+
+export function isIncomingMoneyDescription(description: string): boolean {
+  return /INCOMING\s+PAYNOW|PAYNOW.*\bFROM\b|\bFAST\b.*\bFROM\b|INCOMING\s+TRANSFER|TRANSFER\s+FROM|\bGOV\s+GST\b|\bGSTV\b/.test(
+    description.toUpperCase()
+  );
+}
+
+export function isOfficeClaimDescription(description: string): boolean {
+  return /OFFICE\s+CLAIM|CLAIM\s+REIMBURSEMENT|EXPENSE\s+REIMBURSEMENT/.test(description.toUpperCase());
 }
 
 // Auto-categorize based on description, amounts, and user-defined custom rules
@@ -215,6 +225,7 @@ export function categorizeTransaction(
     /SALARY|PAYROLL|DIRECT CREDIT|GIRO - SALARY|MONTHLY PAY|DIVIDEND|BONUS|ALLOWANCE|STIPEND|INTEREST EARNED|INCOME/.test(
       upper
     );
+  const isOfficeClaim = isOfficeClaimDescription(rawDesc);
 
   // Check custom user memory rules first (with regex and substring matching)
   for (const [pattern, savedCategory] of Object.entries(customRules)) {
@@ -267,7 +278,30 @@ export function categorizeTransaction(
     };
   }
 
-  // 3. Refunds & Credits
+  // An office-claim payment is spending until it is reimbursed. A matching
+  // statement credit is an account refund and therefore offsets that spend.
+  if (isOfficeClaim) {
+    return {
+      cleanMerchant: cleanName,
+      category: 'Office Claims',
+      type: credit > 0 && debit === 0 ? 'refund' : 'expense',
+      amount: debit > 0 ? debit : credit,
+    };
+  }
+
+  // 3. Incoming person-to-person and government deposits are money received,
+  // not merchant refunds. They must never reduce the month's expenditure.
+  const isIncomingMoney = isIncomingMoneyDescription(rawDesc);
+  if (credit > 0 && debit === 0 && isIncomingMoney) {
+    return {
+      cleanMerchant: cleanName,
+      category: 'Money In',
+      type: 'income',
+      amount: credit,
+    };
+  }
+
+  // 4. Merchant refunds & credits
   if (credit > 0 && debit === 0) {
     let cat: ExpenseCategory = 'Shopping & E-Commerce';
     if (/GRAB|TAXI|COMFORT/.test(upper)) cat = 'Transport & Petrol';

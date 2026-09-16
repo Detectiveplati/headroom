@@ -63,8 +63,12 @@ export type ActiveTab = 'tasks' | 'expenses';
 
 export type TransactionType = 'expense' | 'refund' | 'transfer' | 'income';
 
+export type OfficeClaimReimbursementMethod = 'pending' | 'account' | 'cash';
+
 export type ExpenseCategory =
   | 'Salary & Income'
+  | 'Money In'
+  | 'Office Claims'
   | 'Food & Dining'
   | 'Groceries'
   | 'Transport & Petrol'
@@ -114,6 +118,7 @@ export interface Transaction {
   type: TransactionType;
   category: ExpenseCategory;
   paymentType?: string;
+  reimbursementMethod?: OfficeClaimReimbursementMethod;
   balanceAfterTx?: number;
   reviewed: boolean;
   createdAt: number;

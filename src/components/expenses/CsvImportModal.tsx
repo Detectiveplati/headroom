@@ -49,6 +49,8 @@ interface CsvImportModalProps {
 
 const ALL_CATEGORIES: ExpenseCategory[] = [
   'Salary & Income',
+  'Money In',
+  'Office Claims',
   'Food & Dining',
   'Groceries',
   'Transport & Petrol',

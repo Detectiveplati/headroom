@@ -5,6 +5,8 @@
 
 export const EXPENSE_CATEGORIES = [
   'Salary & Income',
+  'Money In',
+  'Office Claims',
   'Food & Dining',
   'Groceries',
   'Transport & Petrol',
@@ -52,6 +54,8 @@ For each transaction:
 - amount: The numeric absolute value (positive float, e.g. 14.50).
 - type: One of 'expense' (purchases, debits), 'refund' (returns, credits), 'income' (salary, incoming deposits), or 'transfer' (inter-bank transfer, credit card payment).
 - For PayNow, use 'PayNow Transfers' and type 'transfer' for a likely person-to-person transfer. If the recipient is clearly a business, categorize the business normally.
+- For non-refund incoming deposits, including Incoming PayNow, FAST payments from a person, or government payouts, use 'Money In' and type 'income'.
+- Use 'Office Claims' for an expense explicitly identified as an office claim or reimbursement; statement credits for those claims are type 'refund'.
 - category: Select the most accurate category from:
   ${EXPENSE_CATEGORIES.map((c) => `"${c}"`).join(', ')}.
 
@@ -185,6 +189,8 @@ const MAX_CATEGORIZATION_BATCH_SIZE = 100;
 
 const CATEGORY_BY_CODE = {
   income: 'Salary & Income',
+  moneyin: 'Money In',
+  office: 'Office Claims',
   food: 'Food & Dining',
   grocery: 'Groceries',
   transport: 'Transport & Petrol',
@@ -258,7 +264,7 @@ export async function categorizeUnknownTransactions(rawItems = []) {
   const compactItems = uniqueList.map((item) => [item.id, item.representativeDescription]);
   const promptText = `Classify each bank transaction. Return exactly one result for every input ID.
 Fields: i=input ID; m=clean merchant; c=category code; p=uppercase reusable keyword/short regex; t=type code.
-Categories: income=Salary & Income, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, paynow=PayNow Transfers, unknown=Uncategorized.
+Categories: income=Salary & Income, moneyin=Money In (non-refund incoming deposits), office=Office Claims, food=Food & Dining, grocery=Groceries, transport=Transport & Petrol, shopping=Shopping & E-Commerce, entertainment=Entertainment & Gaming, personal=Personal Care & Services, bills=Bills & Utilities, transfer=Transfer / Payment, paynow=PayNow Transfers, unknown=Uncategorized.
 Types: e=expense, i=income, r=refund, t=transfer. Use unknown when uncertain. Do not include prose.
 Input: ${JSON.stringify(compactItems)}`;
 
