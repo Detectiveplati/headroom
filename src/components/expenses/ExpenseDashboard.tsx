@@ -34,7 +34,8 @@ import {
 import { CsvImportModal, StatementUploadContext } from './CsvImportModal';
 import { BalanceSheetOverview } from './BalanceSheetOverview';
 import { MonthlyUploadTracker } from './MonthlyUploadTracker';
-import { getReusableRulePattern, getTransactionTypeForCategory } from '../../utils/csvParser';
+import { getTransactionTypeForCategory } from '../../utils/csvParser';
+import { getManualCategoryRulePattern } from '../../utils/manualCategoryRule';
 
 interface ExpenseDashboardProps {
   transactions: Transaction[];
@@ -329,7 +330,7 @@ export const ExpenseDashboard: React.FC<ExpenseDashboardProps> = ({
         : t)
     );
 
-    const rulePattern = getReusableRulePattern(merchant);
+    const rulePattern = getManualCategoryRulePattern(newCat, merchant);
     if (rulePattern) {
       onSaveRule(rulePattern, newCat);
     }

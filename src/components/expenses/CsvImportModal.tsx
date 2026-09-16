@@ -19,7 +19,8 @@ import {
   TrackedAccount,
   AccountType
 } from '../../types';
-import { getReusableRulePattern, getTransactionTypeForCategory, parseBankStatementCsv, getTransactionSignature } from '../../utils/csvParser';
+import { getTransactionTypeForCategory, parseBankStatementCsv, getTransactionSignature } from '../../utils/csvParser';
+import { getManualCategoryRulePattern } from '../../utils/manualCategoryRule';
 
 export interface StatementUploadContext {
   accountId?: string;
@@ -290,7 +291,8 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({
 
     if (currentTransaction.category === newCategory) return;
 
-    const rulePattern = getReusableRulePattern(
+    const rulePattern = getManualCategoryRulePattern(
+      newCategory,
       currentTransaction.cleanMerchant || currentTransaction.rawDescription
     );
 

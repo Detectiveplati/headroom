@@ -180,6 +180,8 @@ export function getReusableRulePattern(description: string): string {
   return description
     .toUpperCase()
     .replace(/\b\d{2}[A-Z]{3}\b|\b\d{4,}\b/g, ' ')
+    // Bank references often join a letter prefix to a long changing number, e.g. SGGP260428722158.
+    .replace(/\b[A-Z]{2,}\d{4,}[A-Z0-9]*\b|\b\d{8,}[A-Z0-9]*\b/g, ' ')
     .replace(/[^A-Z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
