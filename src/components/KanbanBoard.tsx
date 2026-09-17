@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { Task, Column, ColumnId, Priority, BoardFilter, AppSettings, TaskContext, TaskColor } from '../types';
 import { KanbanColumn } from './KanbanColumn';
+import { DoneRail } from './DoneRail';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -44,7 +45,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     context: 'all',
   });
 
-  const columns: Column[] = [
+  const flowColumns: Column[] = [
     {
       id: 'backlog',
       title: 'Brain Dump',
@@ -63,20 +64,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     },
     {
       id: 'doing',
-      title: 'In Progress',
+      title: 'In Progress Focus',
       subtitle: `Max ${settings.wipLimit} concurrent tasks`,
       wipLimit: settings.wipLimit,
       badgeColor: 'amber',
       borderColor: 'border-amber-500/20',
       iconName: 'Zap',
-    },
-    {
-      id: 'done',
-      title: 'Done',
-      subtitle: 'Shipped & celebrated',
-      badgeColor: 'emerald',
-      borderColor: 'border-emerald-500/20',
-      iconName: 'CheckCircle2',
     },
   ];
 
@@ -145,7 +138,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const isFiltered = filter.search !== '' || filter.priority !== 'all' || filter.tag !== 'all';
 
   return (
-    <div className="flex-1 flex flex-col max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4">
+    <div className="flex-1 flex flex-col max-w-[1680px] w-full mx-auto px-4 sm:px-6 py-4 space-y-4">
       {/* Search & Filter Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-offwhite-surface/90 dark:bg-zinc-900/40 p-2.5 rounded-2xl border border-zinc-300/80 dark:border-zinc-800/80 backdrop-blur-sm shadow-sm dark:shadow-none">
         <div className="flex items-center gap-2 flex-1 min-w-[220px]">
@@ -216,43 +209,67 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         )}
       </div>
 
-      {/* 4 Flow Columns Kanban Grid */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start overflow-x-auto pb-6">
-        {columns.map((col) => (
-          <KanbanColumn
-            key={col.id}
-            column={col}
-            tasks={filteredTasks.filter((t) => t.columnId === col.id)}
-            activeTaskId={activeTaskId}
-            onEditTask={onEditTask}
-            onDeleteTask={onDeleteTask}
-            onMoveTask={(taskId, targetCol) => {
-              // Direct move check
-              if (targetCol === 'doing') {
-                const currentDoingCount = tasks.filter((t) => t.columnId === 'doing').length;
-                if (currentDoingCount >= settings.wipLimit) {
-                  const task = tasks.find((t) => t.id === taskId);
-                  if (task) {
-                    onWipViolation(task);
-                    return;
+      {/* Asymmetric Columns Layout: Expanded Brain Dump, Today, Focus Zone + Collapsed Done Rail */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 items-start pb-6 w-full">
+        {flowColumns.map((col) => {
+          const isWide = col.id === 'backlog';
+          const isFocus = col.id === 'doing';
+          return (
+            <div
+              key={col.id}
+              className={`w-full flex flex-col self-stretch ${
+                isWide
+                  ? 'lg:flex-[1.6] lg:min-w-[340px]'
+                  : isFocus
+                  ? 'lg:flex-[1.1] lg:min-w-[300px]'
+                  : 'lg:flex-1 lg:min-w-[280px]'
+              }`}
+            >
+              <KanbanColumn
+                column={col}
+                tasks={filteredTasks.filter((t) => t.columnId === col.id)}
+                activeTaskId={activeTaskId}
+                isWide={isWide}
+                isFocusZone={isFocus}
+                onEditTask={onEditTask}
+                onDeleteTask={onDeleteTask}
+                onMoveTask={(taskId, targetCol) => {
+                  // Direct move check
+                  if (targetCol === 'doing') {
+                    const currentDoingCount = tasks.filter((t) => t.columnId === 'doing').length;
+                    if (currentDoingCount >= settings.wipLimit) {
+                      const task = tasks.find((t) => t.id === taskId);
+                      if (task) {
+                        onWipViolation(task);
+                        return;
+                      }
+                    }
                   }
-                }
-              }
-              onMoveTask(taskId, targetCol);
-            }}
-            onToggleSubtask={onToggleSubtask}
-            onUpdateColor={onUpdateColor}
-            onUpdateTitle={onUpdateTitle}
-            onQuickAddTask={(colId, title) => {
-              const defaultCtx = activeContext === 'personal' ? 'personal' : 'work';
-              onQuickAddTask(colId, title, defaultCtx);
-            }}
-            onToggleTimer={onToggleTimer}
-            onFocusTask={onFocusTask}
-            onDragStart={handleDragStart}
-            onDropTask={handleDropTask}
-          />
-        ))}
+                  onMoveTask(taskId, targetCol);
+                }}
+                onToggleSubtask={onToggleSubtask}
+                onUpdateColor={onUpdateColor}
+                onUpdateTitle={onUpdateTitle}
+                onQuickAddTask={(colId, title) => {
+                  const defaultCtx = activeContext === 'personal' ? 'personal' : 'work';
+                  onQuickAddTask(colId, title, defaultCtx);
+                }}
+                onToggleTimer={onToggleTimer}
+                onFocusTask={onFocusTask}
+                onDragStart={handleDragStart}
+                onDropTask={handleDropTask}
+              />
+            </div>
+          );
+        })}
+
+        {/* Collapsed Done Archive Rail / Drawer */}
+        <DoneRail
+          tasks={filteredTasks.filter((t) => t.columnId === 'done')}
+          onRestoreTask={(taskId) => onMoveTask(taskId, 'today')}
+          onDeleteTask={onDeleteTask}
+          onDropTask={(e) => handleDropTask(e, 'done')}
+        />
       </div>
     </div>
   );

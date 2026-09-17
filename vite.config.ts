@@ -260,14 +260,14 @@ function syncApiPlugin(): Plugin {
         // POST /api/tasks/beautify-title
         if (pathname === '/api/tasks/beautify-title' && req.method === 'POST') {
           const payload = await readBody();
-          const { title } = payload || {};
+          const { title, apiKey } = payload || {};
           if (!title || typeof title !== 'string' || !title.trim()) {
             res.statusCode = 400;
             res.end(JSON.stringify({ success: false, error: 'A valid title string is required' }));
             return;
           }
           try {
-            const result = await beautifyTitleWithGemini({ title: title.trim() });
+            const result = await beautifyTitleWithGemini({ title: title.trim(), apiKey });
             res.statusCode = 200;
             res.end(JSON.stringify({ success: true, ...result }));
           } catch (aiErr: unknown) {

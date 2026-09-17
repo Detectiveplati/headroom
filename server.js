@@ -305,13 +305,13 @@ const server = http.createServer(async (req, res) => {
       // 12. POST /api/tasks/beautify-title (Gemini AI Title Summarization)
       if (pathname === '/api/tasks/beautify-title' && req.method === 'POST') {
         const payload = await parseBody(req);
-        const { title } = payload || {};
+        const { title, apiKey } = payload || {};
         if (!title || typeof title !== 'string' || !title.trim()) {
           sendJson(res, 400, { success: false, error: 'A valid title string is required' });
           return;
         }
         try {
-          const result = await beautifyTitleWithGemini({ title: title.trim() });
+          const result = await beautifyTitleWithGemini({ title: title.trim(), apiKey });
           sendJson(res, 200, { success: true, ...result });
         } catch (aiErr) {
           sendJson(res, 400, { success: false, error: aiErr.message });

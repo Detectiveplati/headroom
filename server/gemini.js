@@ -387,8 +387,8 @@ Input: ${JSON.stringify(compactItems)}`;
  * Converts verbose, unstructured titles into concise, action-oriented task titles (max 5 words).
  * Returns plain text to avoid JSON structure overhead.
  */
-export async function beautifyTitleWithGemini({ title }) {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
+export async function beautifyTitleWithGemini({ title, apiKey: customKey }) {
+  const apiKey = (customKey || process.env.GEMINI_API_KEY)?.trim();
 
   if (!apiKey) {
     throw new Error(

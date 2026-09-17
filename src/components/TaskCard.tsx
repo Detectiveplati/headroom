@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Clock, 
   CheckSquare, 
@@ -53,8 +53,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onFocusTask,
   onDragStart,
 }) => {
-  const [showSubtasks, setShowSubtasks] = useState(false);
+  const [showSubtasks, setShowSubtasks] = useState(task.columnId === 'doing');
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [localSeconds, setLocalSeconds] = useState(task.elapsedSeconds || 0);
+
+  useEffect(() => {
+    setLocalSeconds(task.elapsedSeconds || 0);
+  }, [task.id, task.elapsedSeconds]);
+
+  useEffect(() => {
+    if (!task.isRunning) return;
+    const interval = setInterval(() => {
+      setLocalSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [task.isRunning, task.id]);
 
   const completedSubtasks = task.subtasks.filter((s) => s.completed).length;
   const totalSubtasks = task.subtasks.length;
@@ -82,6 +95,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     if (mins < 60) return `${mins}m`;
     const hrs = Math.floor(mins / 60);
     return `${hrs}h ${mins % 60}m`;
+  };
+
+  const formatDigitalTimer = (sec: number) => {
+    const hrs = Math.floor(sec / 3600);
+    const mins = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const formatDueDate = (dateStr: string, hasSpecificTime?: boolean) => {
@@ -278,6 +301,58 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
             {task.description}
           </p>
+        )}
+
+        {/* Focus Engine: Glowing Hero Stopwatch & Quick Finish (when in doing column) */}
+        {isDoingTask && (
+          <div className="p-3 rounded-xl bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 flex items-center justify-between gap-3 shadow-inner my-2">
+            <div className="flex items-center gap-2.5">
+              {onToggleTimer && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleTimer(task.id);
+                  }}
+                  className={`p-2 rounded-xl border transition shadow-xs active:scale-95 ${
+                    task.isRunning
+                      ? 'bg-amber-500 text-white border-amber-400 shadow-amber-500/30'
+                      : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
+                  }`}
+                  title={task.isRunning ? "Pause Stopwatch" : "Start Stopwatch"}
+                >
+                  {task.isRunning ? (
+                    <Pause className="w-4 h-4 fill-white" />
+                  ) : (
+                    <Play className="w-4 h-4 fill-emerald-500" />
+                  )}
+                </button>
+              )}
+              <div>
+                <div className="flex items-center gap-1.5 text-[10px] uppercase font-mono font-semibold text-amber-700 dark:text-amber-300">
+                  <span className={`w-1.5 h-1.5 rounded-full ${task.isRunning ? 'bg-amber-500 animate-ping' : 'bg-zinc-400'}`} />
+                  <span>{task.isRunning ? 'Focus Active' : 'Focus Paused'}</span>
+                </div>
+                <div className="font-mono text-lg sm:text-xl font-bold tracking-wider text-amber-900 dark:text-amber-100">
+                  {formatDigitalTimer(localSeconds)}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Finish Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMove(task.id, 'done');
+              }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+              title="Finish Task & Celebrate"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Finish</span>
+            </button>
+          </div>
         )}
 
         {/* Checklist Progress Bar & Toggle */}

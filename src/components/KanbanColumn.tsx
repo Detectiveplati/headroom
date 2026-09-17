@@ -31,6 +31,8 @@ interface KanbanColumnProps {
   onFocusTask: (taskId: string) => void;
   onDragStart: (e: React.DragEvent, taskId: string) => void;
   onDropTask: (e: React.DragEvent, columnId: ColumnId) => void;
+  isWide?: boolean;
+  isFocusZone?: boolean;
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -48,6 +50,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onFocusTask,
   onDragStart,
   onDropTask,
+  isWide = false,
+  isFocusZone = false,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [quickTitle, setQuickTitle] = useState('');
@@ -94,17 +98,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
         setIsDragOver(false);
         onDropTask(e, column.id);
       }}
-      className={`flex flex-col flex-1 min-w-[280px] max-w-sm rounded-2xl border transition-all duration-300 backdrop-blur-sm ${
+      className={`flex flex-col flex-1 min-w-[280px] ${isWide ? 'w-full max-w-none' : 'max-w-md'} rounded-2xl border transition-all duration-300 backdrop-blur-sm ${
         isDragOver
           ? 'border-brand-500/80 bg-brand-50 dark:bg-brand-950/20 ring-2 ring-brand-500/30'
-          : isDoingActive
+          : isDoingActive || isFocusZone
           ? 'border-amber-400/90 dark:border-amber-500/60 bg-gradient-to-b from-amber-500/[0.10] via-amber-500/[0.04] to-offwhite-surface/95 dark:from-amber-950/30 dark:via-amber-950/15 dark:to-[#0e1017]/85 ring-2 ring-amber-400/30 dark:ring-amber-500/30 shadow-lg shadow-amber-500/10 dark:shadow-amber-500/10'
           : 'border-zinc-300/80 dark:border-zinc-800/80 bg-offwhite-surface/85 dark:bg-[#0e1017]/70 shadow-sm dark:shadow-none'
       }`}
     >
       {/* Column Header */}
       <div className={`p-3.5 border-b transition-colors duration-200 ${
-        isDoingActive
+        isDoingActive || isFocusZone
           ? 'border-amber-400/60 dark:border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30'
           : 'border-zinc-300/70 dark:border-zinc-800/80'
       }`}>
@@ -231,7 +235,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 
                 {/* Cards in this color group */}
                 {!isCollapsed && (
-                  <div className="space-y-3 pl-1">
+                  <div className={isWide ? "grid grid-cols-1 xl:grid-cols-2 gap-3 pl-1" : "space-y-3 pl-1"}>
                     {colorTasks.map((task) => (
                       <TaskCard
                         key={task.id}
@@ -254,22 +258,24 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             );
           })
         ) : (
-          tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              isFocused={task.id === activeTaskId}
-              onEdit={onEditTask}
-              onDelete={onDeleteTask}
-              onMove={onMoveTask}
-              onToggleSubtask={onToggleSubtask}
-              onUpdateColor={onUpdateColor}
-              onUpdateTitle={onUpdateTitle}
-              onToggleTimer={onToggleTimer}
-              onFocusTask={onFocusTask}
-              onDragStart={onDragStart}
-            />
-          ))
+          <div className={isWide ? "grid grid-cols-1 xl:grid-cols-2 gap-3" : "space-y-3"}>
+            {tasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                isFocused={task.id === activeTaskId}
+                onEdit={onEditTask}
+                onDelete={onDeleteTask}
+                onMove={onMoveTask}
+                onToggleSubtask={onToggleSubtask}
+                onUpdateColor={onUpdateColor}
+                onUpdateTitle={onUpdateTitle}
+                onToggleTimer={onToggleTimer}
+                onFocusTask={onFocusTask}
+                onDragStart={onDragStart}
+              />
+            ))}
+          </div>
         )}
 
         {tasks.length === 0 && (

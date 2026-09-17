@@ -174,6 +174,7 @@ export interface CategorizedRuleResult {
 
 export interface BeautifyTitleRequest {
   title: string;
+  apiKey?: string;
 }
 
 export interface BeautifyTitleResponse {
