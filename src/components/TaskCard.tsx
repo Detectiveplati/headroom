@@ -16,9 +16,11 @@ import {
   Calendar,
   Briefcase,
   Home,
-  Zap
+  Zap,
+  Palette
 } from 'lucide-react';
-import { Task, ColumnId } from '../types';
+import { Task, ColumnId, TaskColor } from '../types';
+import { TASK_COLORS, TASK_COLOR_LIST, getTaskColorConfig } from '../utils/cardColors';
 
 interface TaskCardProps {
   task: Task;
@@ -27,6 +29,7 @@ interface TaskCardProps {
   onDelete: (taskId: string) => void;
   onMove: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
+  onUpdateColor?: (taskId: string, color: TaskColor) => void;
   onToggleTimer?: (taskId: string) => void;
   onFocusTask?: (taskId: string) => void;
   onDragStart: (e: React.DragEvent, taskId: string) => void;
@@ -41,11 +44,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onDelete,
   onMove,
   onToggleSubtask,
+  onUpdateColor,
   onToggleTimer,
   onFocusTask,
   onDragStart,
 }) => {
   const [showSubtasks, setShowSubtasks] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   const completedSubtasks = task.subtasks.filter((s) => s.completed).length;
   const totalSubtasks = task.subtasks.length;
@@ -76,18 +81,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const isDoingTask = task.columnId === 'doing';
+  const colorCfg = getTaskColorConfig(task.color);
+  const hasCustomColor = task.color && task.color !== 'default';
+
+  const getCardClasses = () => {
+    if (isFocused) {
+      return `bg-offwhite-card dark:bg-zinc-900/95 border-brand-500/70 shadow-md shadow-brand-500/15 ring-1 ring-brand-500/40 ${hasCustomColor ? colorCfg.borderLeftClass : isDoingTask ? 'border-l-4 border-l-amber-500' : ''}`;
+    }
+    if (isDoingTask) {
+      return `${hasCustomColor ? colorCfg.bgClass : 'bg-[#fffefb] dark:bg-[#181520]'} ${hasCustomColor ? colorCfg.borderClass : 'border-amber-400/80 dark:border-amber-500/50'} ${hasCustomColor ? colorCfg.borderLeftClass : 'border-l-4 border-l-amber-500'} hover:border-amber-500 dark:hover:border-amber-400 shadow-md shadow-amber-500/10 hover:shadow-lg`;
+    }
+    if (hasCustomColor) {
+      return `${colorCfg.bgClass} ${colorCfg.borderClass} ${colorCfg.borderLeftClass} shadow-xs hover:shadow-md`;
+    }
+    return 'bg-offwhite-card dark:bg-[#151821]/80 hover:bg-offwhite-card dark:hover:bg-[#1a1e2a] border-zinc-300/70 dark:border-zinc-800/80 hover:border-zinc-400/90 dark:hover:border-zinc-700 shadow-xs hover:shadow-md';
+  };
 
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, task.id)}
-      className={`group relative rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing border select-none ${
-        isFocused
-          ? 'bg-offwhite-card dark:bg-zinc-900/95 border-brand-500/70 shadow-md shadow-brand-500/15 ring-1 ring-brand-500/40' + (isDoingTask ? ' border-l-4 border-l-amber-500' : '')
-          : isDoingTask
-          ? 'bg-[#fffefb] dark:bg-[#181520] border-amber-400/80 dark:border-amber-500/50 border-l-4 border-l-amber-500 hover:border-amber-500 dark:hover:border-amber-400 shadow-md shadow-amber-500/10 hover:shadow-lg hover:bg-white dark:hover:bg-[#1e1929]'
-          : 'bg-offwhite-card dark:bg-[#151821]/80 hover:bg-offwhite-card dark:hover:bg-[#1a1e2a] border-zinc-300/70 dark:border-zinc-800/80 hover:border-zinc-400/90 dark:hover:border-zinc-700 shadow-xs hover:shadow-md'
-      }`}
+      className={`group relative rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing border select-none ${getCardClasses()}`}
     >
       <div className="p-3.5 space-y-2.5">
         {/* Card Header: Drag handle, Priority, Context badge & Actions */}
@@ -141,6 +155,54 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               >
                 Set Focus
               </button>
+            )}
+
+            {onUpdateColor && (
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowColorPicker((prev) => !prev);
+                  }}
+                  className={`p-1 rounded transition ${
+                    hasCustomColor 
+                      ? 'text-zinc-600 dark:text-zinc-300 hover:bg-offwhite-subtle dark:hover:bg-zinc-800/80' 
+                      : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-offwhite-subtle dark:hover:bg-zinc-800/80'
+                  }`}
+                  title={`Color: ${colorCfg.label} (Click to change)`}
+                >
+                  <Palette className="w-3.5 h-3.5" />
+                </button>
+
+                {showColorPicker && (
+                  <div
+                    className="absolute right-0 top-full mt-1 z-30 p-1.5 rounded-xl bg-offwhite-surface dark:bg-[#11131c] border border-zinc-300/80 dark:border-zinc-700 shadow-xl flex items-center gap-1.5 animate-fadeIn"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {TASK_COLOR_LIST.map((c) => {
+                      const cfg = TASK_COLORS[c];
+                      const isCurrent = (task.color || 'default') === c;
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateColor(task.id, c);
+                            setShowColorPicker(false);
+                          }}
+                          title={cfg.label}
+                          className={`w-4 h-4 rounded-full transition-transform hover:scale-125 ${cfg.dotClass} ${
+                            isCurrent
+                              ? 'ring-2 ring-brand-500 ring-offset-1 dark:ring-offset-zinc-900 scale-110 shadow-xs'
+                              : 'opacity-75 hover:opacity-100'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
 
             <button

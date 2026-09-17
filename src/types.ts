@@ -6,6 +6,17 @@ export type TaskContext = 'work' | 'personal';
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 
+export type TaskColor = 
+  | 'default' 
+  | 'red' 
+  | 'amber' 
+  | 'emerald' 
+  | 'teal' 
+  | 'blue' 
+  | 'indigo' 
+  | 'purple' 
+  | 'pink';
+
 export interface Subtask {
   id: string;
   title: string;
@@ -19,6 +30,7 @@ export interface Task {
   columnId: ColumnId;
   priority: Priority;
   context?: TaskContext;
+  color?: TaskColor;
   subtasks: Subtask[];
   tags: string[];
   elapsedSeconds: number;

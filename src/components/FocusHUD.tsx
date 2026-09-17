@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Task, AppSettings, TaskContext, ThemeMode, User, ActiveTab } from '../types';
 import { SyncStatus } from '../utils/sync';
+import { getTaskColorConfig } from '../utils/cardColors';
 
 interface FocusHUDProps {
   activeTab: ActiveTab;
@@ -238,7 +239,11 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
         {/* Center: Primary focus is intentionally board-only. */}
         {activeTab === 'tasks' && <div className="flex-1 w-full md:w-auto flex items-center justify-center">
           {activeTask ? (
-            <div className="flex items-center gap-3 bg-offwhite-card dark:bg-zinc-900/90 border border-brand-500/40 px-3.5 py-1.5 rounded-xl shadow-md shadow-brand-500/10 max-w-2xl w-full justify-between animate-fadeIn">
+            <div className={`flex items-center gap-3 bg-offwhite-card dark:bg-zinc-900/90 border px-3.5 py-1.5 rounded-xl shadow-md max-w-2xl w-full justify-between animate-fadeIn ${
+              activeTask.color && activeTask.color !== 'default'
+                ? `${getTaskColorConfig(activeTask.color).borderLeftClass} ${getTaskColorConfig(activeTask.color).borderClass} shadow-xs`
+                : 'border-brand-500/40 shadow-brand-500/10'
+            }`}>
               <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
                 <div className="relative flex items-center justify-center shrink-0">
                   <span className="flex h-2.5 w-2.5 relative">
@@ -250,6 +255,13 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
                 <span className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${getPriorityBadgeClass(activeTask.priority)}`}>
                   {activeTask.priority}
                 </span>
+
+                {activeTask.color && activeTask.color !== 'default' && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-300/80 dark:border-zinc-700/80">
+                    <span className={`w-1.5 h-1.5 rounded-full ${getTaskColorConfig(activeTask.color).dotClass}`} />
+                    <span>{getTaskColorConfig(activeTask.color).label}</span>
+                  </span>
+                )}
 
                 <button 
                   onClick={() => onOpenTaskModal(activeTask)}

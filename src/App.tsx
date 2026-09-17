@@ -12,7 +12,8 @@ import {
   ExpenseCategory, 
   CardMetaInfo,
   TrackedAccount,
-  MonthlyAccountUpload
+  MonthlyAccountUpload,
+  TaskColor
 } from './types';
 import { 
   loadStoredTasks, 
@@ -528,6 +529,13 @@ export const App: React.FC = () => {
     soundManager.playSubtaskCheck();
   }, []);
 
+  // Update Task Color
+  const handleUpdateTaskColor = useCallback((taskId: string, color: TaskColor) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, color } : t))
+    );
+  }, []);
+
   // Quick Add Task in Column
   const handleQuickAddTask = useCallback((columnId: ColumnId, title: string, context?: TaskContext) => {
     const defaultCtx = context || (activeContext === 'personal' ? 'personal' : 'work');
@@ -696,6 +704,7 @@ export const App: React.FC = () => {
             onDeleteTask={handleDeleteTask}
             onMoveTask={handleMoveTask}
             onToggleSubtask={handleToggleSubtask}
+            onUpdateColor={handleUpdateTaskColor}
             onQuickAddTask={handleQuickAddTask}
             onToggleTimer={handleToggleTimer}
             onFocusTask={(taskId) => setActiveTaskId(taskId)}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, X } from 'lucide-react';
-import { Task, Column, ColumnId, Priority, BoardFilter, AppSettings, TaskContext } from '../types';
+import { Task, Column, ColumnId, Priority, BoardFilter, AppSettings, TaskContext, TaskColor } from '../types';
 import { KanbanColumn } from './KanbanColumn';
 
 interface KanbanBoardProps {
@@ -12,6 +12,7 @@ interface KanbanBoardProps {
   onDeleteTask: (taskId: string) => void;
   onMoveTask: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
+  onUpdateColor?: (taskId: string, color: TaskColor) => void;
   onQuickAddTask: (columnId: ColumnId, title: string, context?: TaskContext) => void;
   onToggleTimer: (taskId: string) => void;
   onFocusTask: (taskId: string) => void;
@@ -27,6 +28,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onDeleteTask,
   onMoveTask,
   onToggleSubtask,
+  onUpdateColor,
   onQuickAddTask,
   onToggleTimer,
   onFocusTask,
@@ -237,6 +239,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               onMoveTask(taskId, targetCol);
             }}
             onToggleSubtask={onToggleSubtask}
+            onUpdateColor={onUpdateColor}
             onQuickAddTask={(colId, title) => {
               const defaultCtx = activeContext === 'personal' ? 'personal' : 'work';
               onQuickAddTask(colId, title, defaultCtx);

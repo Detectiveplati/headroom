@@ -8,9 +8,11 @@ import {
   Calendar, 
   Sparkles,
   Briefcase,
-  Home
+  Home,
+  Palette
 } from 'lucide-react';
-import { Task, Subtask, Priority, ColumnId, TaskContext } from '../types';
+import { Task, Subtask, Priority, ColumnId, TaskContext, TaskColor } from '../types';
+import { TASK_COLORS, TASK_COLOR_LIST } from '../utils/cardColors';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -34,6 +36,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [columnId, setColumnId] = useState<ColumnId>(defaultColumnId);
   const [priority, setPriority] = useState<Priority>('medium');
   const [context, setContext] = useState<TaskContext>(defaultContext);
+  const [color, setColor] = useState<TaskColor>('default');
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -47,6 +50,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setColumnId(initialTask.columnId);
       setPriority(initialTask.priority);
       setContext(initialTask.context || 'work');
+      setColor(initialTask.color || 'default');
       setSubtasks(initialTask.subtasks || []);
       setTags(initialTask.tags || []);
       setDueDate(initialTask.dueDate || '');
@@ -56,6 +60,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setColumnId(defaultColumnId);
       setPriority('medium');
       setContext(defaultContext);
+      setColor('default');
       setSubtasks([]);
       setTags([]);
       setDueDate('');
@@ -113,6 +118,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       columnId,
       priority,
       context,
+      color,
       subtasks,
       tags,
       dueDate: dueDate || undefined,
@@ -243,6 +249,42 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   );
                 })}
               </div>
+            </div>
+          </div>
+
+          {/* Card Accent Color */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-400">
+                <Palette className="w-3.5 h-3.5 text-brand-500" />
+                <span>Card Accent Color</span>
+              </label>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                {TASK_COLORS[color]?.label || 'Neutral'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap p-2 rounded-xl bg-offwhite-subtle/70 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
+              {TASK_COLOR_LIST.map((c) => {
+                const cfg = TASK_COLORS[c];
+                const isSelected = color === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    title={cfg.label}
+                    className={`relative w-6 h-6 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${cfg.dotClass} ${
+                      isSelected
+                        ? 'ring-2 ring-offset-2 ring-brand-500 dark:ring-offset-zinc-900 scale-110 shadow-sm'
+                        : 'opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="w-2 h-2 rounded-full bg-white shadow-xs" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

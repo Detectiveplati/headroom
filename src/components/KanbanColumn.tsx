@@ -6,9 +6,13 @@ import {
   Zap, 
   CheckCircle2, 
   AlertTriangle,
-  Flame
+  Flame,
+  Layers,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
-import { Task, Column, ColumnId } from '../types';
+import { Task, Column, ColumnId, TaskColor } from '../types';
+import { TASK_COLORS, TASK_COLOR_LIST } from '../utils/cardColors';
 import { TaskCard } from './TaskCard';
 
 interface KanbanColumnProps {
@@ -19,6 +23,7 @@ interface KanbanColumnProps {
   onDeleteTask: (taskId: string) => void;
   onMoveTask: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
+  onUpdateColor?: (taskId: string, color: TaskColor) => void;
   onQuickAddTask: (columnId: ColumnId, title: string) => void;
   onToggleTimer: (taskId: string) => void;
   onFocusTask: (taskId: string) => void;
@@ -34,6 +39,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onDeleteTask,
   onMoveTask,
   onToggleSubtask,
+  onUpdateColor,
   onQuickAddTask,
   onToggleTimer,
   onFocusTask,
@@ -43,6 +49,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [quickTitle, setQuickTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [groupByColor, setGroupByColor] = useState(true);
+  const [collapsedColors, setCollapsedColors] = useState<Record<string, boolean>>({});
 
   const getColumnIcon = () => {
     switch (column.iconName) {
@@ -138,45 +146,124 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             </div>
           </div>
 
-          {/* Column WIP Limit badge */}
-          {column.wipLimit !== undefined && (
-            <div
-              className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-full border font-medium ${
-                isWipExceeded
-                  ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/50 animate-pulse-subtle font-semibold ring-1 ring-amber-500/30'
-                  : isDoingActive
-                  ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30'
-                  : 'bg-offwhite-subtle dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-400 border-zinc-300/70 dark:border-zinc-700/50'
-              }`}
-              title={`WIP Limit: ${tasks.length} of ${column.wipLimit} cards.`}
-            >
-              {isWipExceeded ? (
-                <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
-              ) : (
-                <Flame className="w-3 h-3 text-brand-600 dark:text-brand-400" />
-              )}
-              <span>{tasks.length}/{column.wipLimit}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5">
+            {/* Color Grouping Toggle */}
+            {tasks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setGroupByColor(!groupByColor)}
+                className={`p-1 rounded-lg border text-xs transition ${
+                  groupByColor
+                    ? 'bg-brand-500/15 border-brand-500/30 text-brand-600 dark:text-brand-400'
+                    : 'bg-offwhite-subtle dark:bg-zinc-800/70 border-zinc-300/70 dark:border-zinc-700/50 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                }`}
+                title={groupByColor ? "Grouped by Color (Click to show flat list)" : "Flat list (Click to group by color)"}
+              >
+                <Layers className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Column WIP Limit badge */}
+            {column.wipLimit !== undefined && (
+              <div
+                className={`flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-full border font-medium ${
+                  isWipExceeded
+                    ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/50 animate-pulse-subtle font-semibold ring-1 ring-amber-500/30'
+                    : isDoingActive
+                    ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30'
+                    : 'bg-offwhite-subtle dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-400 border-zinc-300/70 dark:border-zinc-700/50'
+                }`}
+                title={`WIP Limit: ${tasks.length} of ${column.wipLimit} cards.`}
+              >
+                {isWipExceeded ? (
+                  <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                ) : (
+                  <Flame className="w-3 h-3 text-brand-600 dark:text-brand-400" />
+                )}
+                <span>{tasks.length}/{column.wipLimit}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Cards Scrollable Container */}
       <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-[420px] max-h-[calc(100vh-230px)]">
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            isFocused={task.id === activeTaskId}
-            onEdit={onEditTask}
-            onDelete={onDeleteTask}
-            onMove={onMoveTask}
-            onToggleSubtask={onToggleSubtask}
-            onToggleTimer={onToggleTimer}
-            onFocusTask={onFocusTask}
-            onDragStart={onDragStart}
-          />
-        ))}
+        {groupByColor ? (
+          TASK_COLOR_LIST.map((colorKey) => {
+            const colorTasks = tasks.filter((t) => (t.color || 'default') === colorKey);
+            if (colorTasks.length === 0) return null;
+            const cfg = TASK_COLORS[colorKey];
+            const isCollapsed = Boolean(collapsedColors[colorKey]);
+
+            return (
+              <div key={colorKey} className="space-y-2">
+                {/* Collapsible Color Sub-Header */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCollapsedColors((prev) => ({
+                      ...prev,
+                      [colorKey]: !prev[colorKey],
+                    }))
+                  }
+                  className={`w-full text-left px-2.5 py-1.5 rounded-xl border text-xs font-medium flex items-center justify-between transition active:scale-[0.99] cursor-pointer ${cfg.groupHeaderClass}`}
+                  title={isCollapsed ? `Expand ${cfg.label} tasks` : `Collapse ${cfg.label} tasks`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isCollapsed ? (
+                      <ChevronRight className="w-3.5 h-3.5 opacity-70 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 opacity-70 shrink-0" />
+                    )}
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dotClass}`} />
+                    <span className="font-semibold text-[11px]">{cfg.label}</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md font-bold bg-white/60 dark:bg-black/40 border border-black/5 dark:border-white/10">
+                    {colorTasks.length}
+                  </span>
+                </button>
+
+                {/* Cards in this color group */}
+                {!isCollapsed && (
+                  <div className="space-y-3 pl-1">
+                    {colorTasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        isFocused={task.id === activeTaskId}
+                        onEdit={onEditTask}
+                        onDelete={onDeleteTask}
+                        onMove={onMoveTask}
+                        onToggleSubtask={onToggleSubtask}
+                        onUpdateColor={onUpdateColor}
+                        onToggleTimer={onToggleTimer}
+                        onFocusTask={onFocusTask}
+                        onDragStart={onDragStart}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              isFocused={task.id === activeTaskId}
+              onEdit={onEditTask}
+              onDelete={onDeleteTask}
+              onMove={onMoveTask}
+              onToggleSubtask={onToggleSubtask}
+              onUpdateColor={onUpdateColor}
+              onToggleTimer={onToggleTimer}
+              onFocusTask={onFocusTask}
+              onDragStart={onDragStart}
+            />
+          ))
+        )}
 
         {tasks.length === 0 && (
           <div className={`h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-xs p-4 text-center ${
