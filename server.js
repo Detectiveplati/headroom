@@ -7,6 +7,8 @@ import {
   saveBoard, 
   registerUser, 
   loginUser, 
+  resetPasswordWithBirthday,
+  updateUserBirthday,
   getUserByToken, 
   deleteSession,
   isPostgresConnected,
@@ -112,9 +114,9 @@ const server = http.createServer(async (req, res) => {
 
       // 2. Auth: Register
       if (pathname === '/api/auth/register' && req.method === 'POST') {
-        const { username, password } = await parseBody(req);
+        const { username, password, birthday } = await parseBody(req);
         try {
-          const result = await registerUser(username, password);
+          const result = await registerUser(username, password, birthday);
           sendJson(res, 201, { success: true, ...result });
         } catch (authErr) {
           sendJson(res, 400, { success: false, error: authErr.message });
@@ -134,6 +136,18 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // 3b. Auth: Reset Password via Birthday
+      if (pathname === '/api/auth/reset-password' && req.method === 'POST') {
+        const { username, birthday, newPassword } = await parseBody(req);
+        try {
+          const result = await resetPasswordWithBirthday(username, birthday, newPassword);
+          sendJson(res, 200, { success: true, ...result, message: 'Password reset successfully' });
+        } catch (err) {
+          sendJson(res, 400, { success: false, error: err.message });
+        }
+        return;
+      }
+
       // 4. Auth: Get Current User
       if (pathname === '/api/auth/me' && req.method === 'GET') {
         const token = getAuthToken(req);
@@ -143,6 +157,24 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         sendJson(res, 200, { success: true, user });
+        return;
+      }
+
+      // 4b. Auth: Update Birthday
+      if (pathname === '/api/auth/update-birthday' && req.method === 'POST') {
+        const token = getAuthToken(req);
+        const user = await getUserByToken(token);
+        if (!user) {
+          sendJson(res, 401, { success: false, error: 'Unauthorized' });
+          return;
+        }
+        const { birthday } = await parseBody(req);
+        try {
+          await updateUserBirthday(user.id, birthday);
+          sendJson(res, 200, { success: true, user: { ...user, birthday }, message: 'Birthday updated successfully' });
+        } catch (err) {
+          sendJson(res, 400, { success: false, error: err.message });
+        }
         return;
       }
 

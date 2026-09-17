@@ -5,6 +5,8 @@ import {
   saveBoard, 
   registerUser, 
   loginUser, 
+  resetPasswordWithBirthday,
+  updateUserBirthday,
   getUserByToken, 
   deleteSession,
   isPostgresConnected,
@@ -60,9 +62,9 @@ function syncApiPlugin(): Plugin {
 
         // Auth endpoints
         if (pathname === '/api/auth/register' && req.method === 'POST') {
-          const { username, password } = await readBody();
+          const { username, password, birthday } = await readBody();
           try {
-            const result = await registerUser(username, password);
+            const result = await registerUser(username, password, birthday);
             res.statusCode = 201;
             res.end(JSON.stringify({ success: true, ...result }));
           } catch (err: any) {
@@ -85,6 +87,19 @@ function syncApiPlugin(): Plugin {
           return;
         }
 
+        if (pathname === '/api/auth/reset-password' && req.method === 'POST') {
+          const { username, birthday, newPassword } = await readBody();
+          try {
+            const result = await resetPasswordWithBirthday(username, birthday, newPassword);
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, ...result, message: 'Password reset successfully' }));
+          } catch (err: any) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: err.message }));
+          }
+          return;
+        }
+
         if (pathname === '/api/auth/me' && req.method === 'GET') {
           const token = getAuthToken();
           const user = await getUserByToken(token);
@@ -95,6 +110,26 @@ function syncApiPlugin(): Plugin {
           }
           res.statusCode = 200;
           res.end(JSON.stringify({ success: true, user }));
+          return;
+        }
+
+        if (pathname === '/api/auth/update-birthday' && req.method === 'POST') {
+          const token = getAuthToken();
+          const user = await getUserByToken(token);
+          if (!user) {
+            res.statusCode = 401;
+            res.end(JSON.stringify({ success: false, error: 'Unauthorized' }));
+            return;
+          }
+          const { birthday } = await readBody();
+          try {
+            await updateUserBirthday(user.id, birthday);
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, user: { ...user, birthday }, message: 'Birthday updated successfully' }));
+          } catch (err: any) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: err.message }));
+          }
           return;
         }
 

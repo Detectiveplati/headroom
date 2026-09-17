@@ -44,6 +44,7 @@ interface FocusHUDProps {
   onSelectContext: (context: TaskContext | 'all') => void;
   currentUser: User | null;
   onOpenAuthModal: () => void;
+  onOpenProfileModal?: () => void;
   onLogout: () => void;
 }
 
@@ -66,6 +67,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
   onSelectContext,
   currentUser,
   onOpenAuthModal,
+  onOpenProfileModal,
   onLogout,
 }) => {
   // Local active timer increment for smooth 1-second ticks
@@ -333,10 +335,20 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
           {/* User Account / Sign In */}
           {currentUser ? (
             <div className="flex items-center gap-1 bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-300/70 dark:border-zinc-800 px-2 py-1 rounded-lg text-xs font-mono">
-              <span className="text-brand-700 dark:text-brand-400 font-semibold">{currentUser.username}</span>
+              <button
+                type="button"
+                onClick={onOpenProfileModal}
+                className="flex items-center gap-1.5 text-brand-700 dark:text-brand-400 font-semibold hover:underline cursor-pointer"
+                title={currentUser.birthday ? `User: ${currentUser.username} (Recovery birthday set)` : `User: ${currentUser.username} (Click to set recovery birthday)`}
+              >
+                <span>{currentUser.username}</span>
+                {!currentUser.birthday && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" title="Missing recovery birthday" />
+                )}
+              </button>
               <button
                 onClick={onLogout}
-                className="p-1 text-zinc-400 hover:text-red-500 transition"
+                className="p-1 text-zinc-400 hover:text-red-500 transition ml-0.5"
                 title="Log out"
               >
                 <LogOut className="w-3 h-3" />

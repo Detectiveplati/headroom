@@ -65,8 +65,11 @@ const TABLE_INIT_SQL = `
     username VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     salt VARCHAR(255) NOT NULL,
+    birthday VARCHAR(50),
     created_at BIGINT NOT NULL
   );
+
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS birthday VARCHAR(50);
 
   CREATE TABLE IF NOT EXISTS sessions (
     token VARCHAR(255) PRIMARY KEY,
@@ -159,13 +162,17 @@ function saveFileStore() {
 }
 
 // ==================== AUTH METHODS ====================
-export async function registerUser(username, password) {
+export async function registerUser(username, password, birthday) {
   const cleanUser = username.trim().toLowerCase();
   if (!cleanUser || cleanUser.length < 3) {
     throw new Error('Username must be at least 3 characters long');
   }
   if (!password || password.length < 4) {
     throw new Error('Password must be at least 4 characters long');
+  }
+  const cleanBirthday = birthday ? String(birthday).trim() : '';
+  if (!cleanBirthday) {
+    throw new Error('Birthday is required for password recovery');
   }
 
   const salt = generateSalt();
@@ -182,8 +189,8 @@ export async function registerUser(username, password) {
       }
 
       await pool.query(
-        'INSERT INTO users (id, username, password_hash, salt, created_at) VALUES ($1, $2, $3, $4, $5)',
-        [userId, cleanUser, passwordHash, salt, now]
+        'INSERT INTO users (id, username, password_hash, salt, birthday, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+        [userId, cleanUser, passwordHash, salt, cleanBirthday, now]
       );
 
       await pool.query(
@@ -191,7 +198,7 @@ export async function registerUser(username, password) {
         [token, userId, now]
       );
 
-      return { user: { id: userId, username: cleanUser }, token };
+      return { user: { id: userId, username: cleanUser, birthday: cleanBirthday }, token };
     } catch (err) {
       if (err.message.includes('unique') || err.message.includes('already taken')) {
         throw new Error('Username is already taken');
@@ -212,6 +219,7 @@ export async function registerUser(username, password) {
     username: cleanUser,
     password_hash: passwordHash,
     salt,
+    birthday: cleanBirthday,
     created_at: now,
   };
 
@@ -219,7 +227,7 @@ export async function registerUser(username, password) {
   fileStoreCache.sessions[token] = { token, user_id: userId, created_at: now };
   saveFileStore();
 
-  return { user: { id: userId, username: cleanUser }, token };
+  return { user: { id: userId, username: cleanUser, birthday: cleanBirthday }, token };
 }
 
 export async function loginUser(username, password) {
@@ -264,12 +272,102 @@ export async function loginUser(username, password) {
   return { user: { id: user.id, username: user.username }, token };
 }
 
+export async function resetPasswordWithBirthday(username, birthday, newPassword) {
+  const cleanUser = (username || '').trim().toLowerCase();
+  const cleanBirthday = (birthday || '').trim();
+
+  if (!cleanUser) {
+    throw new Error('Username is required');
+  }
+  if (!cleanBirthday) {
+    throw new Error('Birthday is required');
+  }
+  if (!newPassword || newPassword.length < 4) {
+    throw new Error('Password must be at least 4 characters long');
+  }
+
+  if (pool) {
+    const res = await pool.query('SELECT * FROM users WHERE username = $1', [cleanUser]);
+    if (res.rows.length === 0) {
+      throw new Error('Invalid username or birthday');
+    }
+    const user = res.rows[0];
+    if (!user.birthday) {
+      throw new Error('No birthday on file for this account. Cannot reset password via birthday.');
+    }
+    if (user.birthday.trim() !== cleanBirthday) {
+      throw new Error('Invalid username or birthday');
+    }
+
+    const salt = generateSalt();
+    const passwordHash = hashPassword(newPassword, salt);
+
+    await pool.query(
+      'UPDATE users SET password_hash = $1, salt = $2 WHERE id = $3',
+      [passwordHash, salt, user.id]
+    );
+
+    const token = generateToken();
+    await pool.query(
+      'INSERT INTO sessions (token, user_id, created_at) VALUES ($1, $2, $3)',
+      [token, user.id, Date.now()]
+    );
+
+    return { user: { id: user.id, username: user.username, birthday: user.birthday }, token };
+  }
+
+  // Local file fallback
+  ensureFileStore();
+  const user = Object.values(fileStoreCache.users).find((u) => u.username === cleanUser);
+  if (!user) {
+    throw new Error('Invalid username or birthday');
+  }
+  if (!user.birthday) {
+    throw new Error('No birthday on file for this account. Cannot reset password via birthday.');
+  }
+  if (user.birthday.trim() !== cleanBirthday) {
+    throw new Error('Invalid username or birthday');
+  }
+
+  const salt = generateSalt();
+  const passwordHash = hashPassword(newPassword, salt);
+
+  user.password_hash = passwordHash;
+  user.salt = salt;
+
+  const token = generateToken();
+  fileStoreCache.sessions[token] = { token, user_id: user.id, created_at: Date.now() };
+  saveFileStore();
+
+  return { user: { id: user.id, username: user.username, birthday: user.birthday }, token };
+}
+
+export async function updateUserBirthday(userId, birthday) {
+  const cleanBirthday = (birthday || '').trim();
+  if (!cleanBirthday) {
+    throw new Error('Valid birthday is required');
+  }
+
+  if (pool) {
+    await pool.query('UPDATE users SET birthday = $1 WHERE id = $2', [cleanBirthday, userId]);
+    return true;
+  }
+
+  ensureFileStore();
+  if (fileStoreCache.users[userId]) {
+    fileStoreCache.users[userId].birthday = cleanBirthday;
+    saveFileStore();
+    return true;
+  }
+  return false;
+}
+
 export async function getUserByToken(token) {
   if (!token) return null;
 
   if (pool) {
     const res = await pool.query(`
-      SELECT u.id, u.username, u.created_at 
+      SELECT u.id, u.username, u.birthday, u.created_at 
       FROM sessions s 
       JOIN users u ON s.user_id = u.id 
       WHERE s.token = $1
@@ -286,7 +384,7 @@ export async function getUserByToken(token) {
   if (!session) return null;
   const user = fileStoreCache.users[session.user_id];
   if (!user) return null;
-  return { id: user.id, username: user.username, created_at: user.created_at };
+  return { id: user.id, username: user.username, birthday: user.birthday, created_at: user.created_at };
 }
 
 export async function deleteSession(token) {

@@ -26,11 +26,11 @@ export function clearStoredAuthToken(): void {
   }
 }
 
-export async function registerApi(username: string, password: string): Promise<{ user: User; token: string }> {
+export async function registerApi(username: string, password: string, birthday: string): Promise<{ user: User; token: string }> {
   const res = await fetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, birthday }),
   });
 
   const data = await res.json();
@@ -40,6 +40,24 @@ export async function registerApi(username: string, password: string): Promise<{
 
   saveStoredAuthToken(data.token);
   return { user: data.user, token: data.token };
+}
+
+export async function resetPasswordApi(username: string, birthday: string, newPassword: string): Promise<{ user: User; token: string; message: string }> {
+  const res = await fetch('/api/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, birthday, newPassword }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Password reset failed');
+  }
+
+  if (data.token) {
+    saveStoredAuthToken(data.token);
+  }
+  return { user: data.user, token: data.token, message: data.message || 'Password reset successfully' };
 }
 
 export async function loginApi(username: string, password: string): Promise<{ user: User; token: string }> {
@@ -99,4 +117,25 @@ export async function logoutApi(): Promise<void> {
     }
   }
   clearStoredAuthToken();
+}
+
+export async function updateBirthdayApi(birthday: string): Promise<User> {
+  const token = getStoredAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const res = await fetch('/api/auth/update-birthday', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ birthday }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || 'Failed to update birthday');
+  }
+
+  return data.user;
 }

@@ -8,20 +8,25 @@ import {
   CheckCircle2, 
   Wallet, 
   Layers,
-  Database
+  Database,
+  KeyRound,
+  Calendar
 } from 'lucide-react';
 import { User } from '../types';
-import { loginApi, registerApi } from '../utils/auth';
+import { loginApi, registerApi, resetPasswordApi } from '../utils/auth';
 
 interface LoginPageProps {
   onSuccess: (user: User) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
-  const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [tab, setTab] = useState<'login' | 'register' | 'reset'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [birthday, setBirthday] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState<{ online: boolean; persistent?: boolean } | null>(null);
 
@@ -39,15 +44,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setSuccessMsg(null);
     setIsLoading(true);
 
     try {
       if (tab === 'login') {
         const { user } = await loginApi(username, password);
         onSuccess(user);
-      } else {
-        const { user } = await registerApi(username, password);
+      } else if (tab === 'register') {
+        if (!birthday) {
+          throw new Error('Please select your birthday for account recovery.');
+        }
+        const { user } = await registerApi(username, password, birthday);
         onSuccess(user);
+      } else {
+        if (!birthday) {
+          throw new Error('Please enter your registered birthday.');
+        }
+        if (password.length < 4) {
+          throw new Error('New password must be at least 4 characters long.');
+        }
+        if (password !== confirmPassword) {
+          throw new Error('Passwords do not match.');
+        }
+        const { user } = await resetPasswordApi(username, birthday, password);
+        setSuccessMsg('Password reset successfully! Entering Headroom...');
+        setTimeout(() => {
+          onSuccess(user);
+        }, 800);
       }
     } catch (err: unknown) {
       setErrorMsg((err as Error).message || 'Authentication error');
@@ -78,7 +102,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
           <div className="flex border-b border-zinc-200 dark:border-zinc-800 bg-offwhite-subtle/50 dark:bg-zinc-950/40 text-xs font-semibold">
             <button
               type="button"
-              onClick={() => { setTab('login'); setErrorMsg(null); }}
+              onClick={() => { setTab('login'); setErrorMsg(null); setSuccessMsg(null); }}
               className={`flex-1 py-3.5 flex items-center justify-center gap-1.5 border-b-2 transition ${
                 tab === 'login'
                   ? 'border-brand-500 text-brand-600 dark:text-brand-400 bg-brand-500/5 dark:bg-brand-500/10'
@@ -90,7 +114,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             </button>
             <button
               type="button"
-              onClick={() => { setTab('register'); setErrorMsg(null); }}
+              onClick={() => { setTab('register'); setErrorMsg(null); setSuccessMsg(null); }}
               className={`flex-1 py-3.5 flex items-center justify-center gap-1.5 border-b-2 transition ${
                 tab === 'register'
                   ? 'border-brand-500 text-brand-600 dark:text-brand-400 bg-brand-500/5 dark:bg-brand-500/10'
@@ -100,6 +124,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
               <UserPlus className="w-3.5 h-3.5" />
               <span>Create Account</span>
             </button>
+            {tab === 'reset' && (
+              <div
+                className="flex-1 py-3.5 flex items-center justify-center gap-1.5 border-b-2 border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/5 dark:bg-amber-500/10"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </div>
+            )}
           </div>
 
           {/* Form */}
@@ -108,6 +140,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
               <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div className="leading-relaxed">{errorMsg}</div>
+              </div>
+            )}
+
+            {successMsg && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">{successMsg}</div>
+              </div>
+            )}
+
+            {tab === 'reset' && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 flex items-start gap-2.5">
+                <KeyRound className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <div className="leading-relaxed">
+                  Enter your username and registered birthday to verify your account and set a new password.
+                </div>
               </div>
             )}
 
@@ -127,43 +175,149 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-offwhite-subtle dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-xs"
-                required
-                autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-              />
-            </div>
+            {(tab === 'register' || tab === 'reset') && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    {tab === 'register' ? 'Birthday (for password recovery)' : 'Registered Birthday'}
+                  </label>
+                  <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    <span>YYYY-MM-DD</span>
+                  </span>
+                </div>
+                <input
+                  type="date"
+                  value={birthday}
+                  onChange={(e) => setBirthday(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-offwhite-subtle dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-xs"
+                  required
+                />
+                {tab === 'register' && (
+                  <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+                    Remember this birthday. It will be required if you ever need to reset your password.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {tab === 'login' && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setTab('reset'); setErrorMsg(null); setSuccessMsg(null); }}
+                    className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline hover:text-brand-500 transition"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-offwhite-subtle dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-xs"
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
+            )}
+
+            {tab === 'register' && (
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-offwhite-subtle dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-xs"
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+            )}
+
+            {tab === 'reset' && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter new password (min. 4 characters)"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-offwhite-subtle dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-xs"
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700/80 bg-offwhite-subtle dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition text-xs"
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+              </>
+            )}
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50"
+              className={`w-full mt-2 py-2.5 px-4 rounded-xl text-white font-semibold text-xs shadow-lg flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 ${
+                tab === 'reset'
+                  ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/25'
+                  : 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/25'
+              }`}
             >
               {isLoading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Authenticating...</span>
+                  <span>{tab === 'reset' ? 'Resetting Password...' : 'Authenticating...'}</span>
                 </>
               ) : tab === 'login' ? (
                 <>
                   <LogIn className="w-3.5 h-3.5" />
                   <span>Enter Headroom</span>
                 </>
-              ) : (
+              ) : tab === 'register' ? (
                 <>
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>Create Account & Enter</span>
                 </>
+              ) : (
+                <>
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Reset Password & Sign In</span>
+                </>
               )}
             </button>
+
+            {tab === 'reset' && (
+              <button
+                type="button"
+                onClick={() => { setTab('login'); setErrorMsg(null); setSuccessMsg(null); }}
+                className="w-full text-center text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition py-1"
+              >
+                ← Back to Sign In
+              </button>
+            )}
 
             {/* Feature preview bullets */}
             <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80 space-y-2 text-[11px] text-zinc-500 dark:text-zinc-400">

@@ -54,6 +54,7 @@ import { TaskModal } from './components/TaskModal';
 import { WipLimitModal } from './components/WipLimitModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
 import { AuthModal } from './components/AuthModal';
+import { ProfileModal } from './components/ProfileModal';
 
 export const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(() => loadStoredTasks());
@@ -77,6 +78,7 @@ export const App: React.FC = () => {
   const [financeOwnerId, setFinanceOwnerId] = useState<string | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Cloud Sync state
   const [boardKey, setBoardKey] = useState<string>(() => getStoredBoardKey());
@@ -675,6 +677,7 @@ export const App: React.FC = () => {
         onSelectContext={setActiveContext}
         currentUser={currentUser}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -760,6 +763,16 @@ export const App: React.FC = () => {
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={handleAuthSuccess}
       />
+
+      {/* Account Profile & Recovery Birthday Modal */}
+      {currentUser && (
+        <ProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          currentUser={currentUser}
+          onUserUpdated={(updatedUser) => setCurrentUser(updatedUser)}
+        />
+      )}
     </div>
   );
 };

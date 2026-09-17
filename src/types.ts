@@ -56,6 +56,7 @@ export interface AppSettings {
 export interface User {
   id: string;
   username: string;
+  birthday?: string;
   createdAt?: number;
 }
 
