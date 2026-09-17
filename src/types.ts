@@ -38,6 +38,7 @@ export interface Task {
   createdAt: number;
   completedAt?: number;
   dueDate?: string;
+  hasSpecificTime?: boolean;
 }
 
 export interface Column {

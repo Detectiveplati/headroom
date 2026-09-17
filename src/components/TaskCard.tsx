@@ -22,6 +22,7 @@ import {
 import { Task, ColumnId, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST, getTaskColorConfig } from '../utils/cardColors';
 import { AiBeautifyButton } from './AiBeautifyButton';
+import { CalendarButton } from './CalendarButton';
 
 interface TaskCardProps {
   task: Task;
@@ -81,6 +82,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     if (mins < 60) return `${mins}m`;
     const hrs = Math.floor(mins / 60);
     return `${hrs}h ${mins % 60}m`;
+  };
+
+  const formatDueDate = (dateStr: string, hasSpecificTime?: boolean) => {
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const dateFormatted = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (hasSpecificTime) {
+        const timeFormatted = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        return `${dateFormatted} • ${timeFormatted}`;
+      }
+      return dateFormatted;
+    } catch {
+      return dateStr;
+    }
   };
 
   const isDoingTask = task.columnId === 'doing';
@@ -373,10 +389,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
 
             {task.dueDate && (
-              <span className="flex items-center gap-1 font-mono text-[10px] text-zinc-500 dark:text-zinc-400">
-                <Calendar className="w-3 h-3" />
-                {task.dueDate}
-              </span>
+              <div 
+                className="flex items-center gap-1 font-mono text-[10px] text-zinc-600 dark:text-zinc-400 bg-offwhite-subtle dark:bg-zinc-800/70 px-1.5 py-0.5 rounded border border-zinc-300/70 dark:border-zinc-700/50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Calendar className="w-3 h-3 text-brand-500 shrink-0" />
+                <span>{formatDueDate(task.dueDate, task.hasSpecificTime)}</span>
+                <CalendarButton task={task} size="xs" tooltipPosition="top" />
+              </div>
             )}
           </div>
 

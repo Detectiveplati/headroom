@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   Inbox, 
@@ -14,6 +14,7 @@ import {
 import { Task, Column, ColumnId, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST } from '../utils/cardColors';
 import { TaskCard } from './TaskCard';
+import { parseNaturalLanguageDate } from '../utils/dateParser';
 
 interface KanbanColumnProps {
   column: Column;
@@ -53,6 +54,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [groupByColor, setGroupByColor] = useState(true);
   const [collapsedColors, setCollapsedColors] = useState<Record<string, boolean>>({});
+
+  const quickNlp = useMemo(() => parseNaturalLanguageDate(quickTitle), [quickTitle]);
 
   const getColumnIcon = () => {
     switch (column.iconName) {
@@ -302,6 +305,12 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               }}
               className="w-full text-xs bg-offwhite-card dark:bg-zinc-900 border border-zinc-300/80 dark:border-brand-500/60 rounded-lg px-2.5 py-1.5 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
+            {quickNlp.hasMatch && (
+              <div className="flex items-center gap-1.5 text-[10px] text-brand-600 dark:text-brand-400 font-medium px-1 bg-brand-500/10 py-1 rounded-md border border-brand-500/20">
+                <Calendar className="w-3 h-3 text-brand-500 shrink-0" />
+                <span className="truncate">📅 {quickNlp.formattedPreview}</span>
+              </div>
+            )}
             <div className="flex items-center justify-end gap-1.5">
               <button
                 type="button"

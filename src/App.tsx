@@ -56,6 +56,7 @@ import { WipLimitModal } from './components/WipLimitModal';
 import { CloudSyncModal } from './components/CloudSyncModal';
 import { AuthModal } from './components/AuthModal';
 import { ProfileModal } from './components/ProfileModal';
+import { parseNaturalLanguageDate } from './utils/dateParser';
 
 export const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>(() => loadStoredTasks());
@@ -546,9 +547,14 @@ export const App: React.FC = () => {
   // Quick Add Task in Column
   const handleQuickAddTask = useCallback((columnId: ColumnId, title: string, context?: TaskContext) => {
     const defaultCtx = context || (activeContext === 'personal' ? 'personal' : 'work');
+    const nlp = parseNaturalLanguageDate(title);
+    const finalTitle = nlp.hasMatch ? nlp.cleanTitle : title.trim();
+    const finalDueDate = nlp.hasMatch ? (nlp.dueDate || undefined) : undefined;
+    const finalHasSpecificTime = nlp.hasMatch ? nlp.hasSpecificTime : undefined;
+
     const newTask: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      title,
+      title: finalTitle,
       columnId,
       priority: 'medium',
       context: defaultCtx,
@@ -557,6 +563,8 @@ export const App: React.FC = () => {
       elapsedSeconds: 0,
       isRunning: columnId === 'doing' && settings.autoStartTimerOnDoing,
       createdAt: Date.now(),
+      dueDate: finalDueDate,
+      hasSpecificTime: finalHasSpecificTime,
     };
 
     setTasks((prev) => [newTask, ...prev]);

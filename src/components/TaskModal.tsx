@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Plus, 
@@ -14,6 +14,8 @@ import {
 import { Task, Subtask, Priority, ColumnId, TaskContext, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST } from '../utils/cardColors';
 import { AiBeautifyButton } from './AiBeautifyButton';
+import { parseNaturalLanguageDate } from '../utils/dateParser';
+import { CalendarButton } from './CalendarButton';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -43,6 +45,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [hasSpecificTime, setHasSpecificTime] = useState(false);
+
+  const nlpResult = useMemo(() => parseNaturalLanguageDate(title), [title]);
 
   useEffect(() => {
     if (initialTask) {
@@ -55,6 +60,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setSubtasks(initialTask.subtasks || []);
       setTags(initialTask.tags || []);
       setDueDate(initialTask.dueDate || '');
+      setHasSpecificTime(initialTask.hasSpecificTime || false);
     } else {
       setTitle('');
       setDescription('');
@@ -65,6 +71,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setSubtasks([]);
       setTags([]);
       setDueDate('');
+      setHasSpecificTime(false);
     }
   }, [initialTask, defaultColumnId, defaultContext, isOpen]);
 
@@ -113,8 +120,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
+    let finalTitle = title.trim();
+    let finalDueDate = dueDate || undefined;
+    let finalHasSpecificTime = hasSpecificTime;
+
+    // Auto-apply NLP parsed date if user hasn't explicitly set one
+    if (!finalDueDate && nlpResult.hasMatch && nlpResult.dueDate) {
+      finalTitle = nlpResult.cleanTitle;
+      finalDueDate = nlpResult.dueDate;
+      finalHasSpecificTime = nlpResult.hasSpecificTime;
+    }
+
     onSave({
-      title: title.trim(),
+      title: finalTitle,
       description: description.trim(),
       columnId,
       priority,
@@ -122,7 +140,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       color,
       subtasks,
       tags,
-      dueDate: dueDate || undefined,
+      dueDate: finalDueDate,
+      hasSpecificTime: finalHasSpecificTime,
     });
     onClose();
   };
@@ -180,6 +199,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               onChange={(e) => setTitle(e.target.value)}
               className="w-full text-xs sm:text-sm bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-xl px-3.5 py-2.5 text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition"
             />
+            {nlpResult.hasMatch && (
+              <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded-xl bg-brand-500/10 border border-brand-500/20 text-xs text-brand-700 dark:text-brand-300 animate-fadeIn">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Calendar className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+                  <span className="truncate">
+                    Detected date: <strong className="font-semibold">{nlpResult.formattedPreview}</strong>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (nlpResult.dueDate) {
+                      setDueDate(nlpResult.dueDate);
+                      setHasSpecificTime(nlpResult.hasSpecificTime);
+                      setTitle(nlpResult.cleanTitle);
+                    }
+                  }}
+                  className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium text-[11px] transition active:scale-95 shadow-xs"
+                >
+                  Set Date & Clean Title
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Context Selector (Work vs Personal) */}
@@ -418,14 +460,41 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             <div>
-              <label className="flex items-center gap-1 text-xs font-medium text-zinc-700 dark:text-zinc-400 mb-1">
-                <Calendar className="w-3 h-3 text-zinc-400" />
-                <span>Target Date (Optional)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="flex items-center gap-1 text-xs font-medium text-zinc-700 dark:text-zinc-400">
+                  <Calendar className="w-3 h-3 text-zinc-400" />
+                  <span>Target Date (Optional)</span>
+                </label>
+                {dueDate && (
+                  <CalendarButton
+                    task={{
+                      id: initialTask?.id || 'temp-task',
+                      title: title.trim() || 'Task',
+                      description,
+                      columnId,
+                      priority,
+                      context,
+                      color,
+                      subtasks,
+                      tags,
+                      elapsedSeconds: 0,
+                      createdAt: Date.now(),
+                      dueDate,
+                      hasSpecificTime,
+                    }}
+                    showLabel
+                    size="xs"
+                    tooltipPosition="top"
+                  />
+                )}
+              </div>
               <input
                 type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                value={dueDate ? dueDate.slice(0, 10) : ''}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  setHasSpecificTime(false);
+                }}
                 className="w-full text-xs bg-offwhite-input dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-700/80 rounded-lg px-2.5 py-1.5 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
