@@ -16,7 +16,7 @@ import {
   saveCategoryRule,
   saveCategoryRulesBatch
 } from './server/db.js';
-import { parseStatementWithGemini, categorizeUnknownTransactions } from './server/gemini.js';
+import { parseStatementWithGemini, categorizeUnknownTransactions, beautifyTitleWithGemini } from './server/gemini.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -298,6 +298,23 @@ const server = http.createServer(async (req, res) => {
           sendJson(res, 200, { success: true, categorized: result.categorized, newRules: result.newRules });
         } catch (catErr) {
           sendJson(res, 400, { success: false, error: catErr.message });
+        }
+        return;
+      }
+
+      // 12. POST /api/tasks/beautify-title (Gemini AI Title Summarization)
+      if (pathname === '/api/tasks/beautify-title' && req.method === 'POST') {
+        const payload = await parseBody(req);
+        const { title } = payload || {};
+        if (!title || typeof title !== 'string' || !title.trim()) {
+          sendJson(res, 400, { success: false, error: 'A valid title string is required' });
+          return;
+        }
+        try {
+          const result = await beautifyTitleWithGemini({ title: title.trim() });
+          sendJson(res, 200, { success: true, ...result });
+        } catch (aiErr) {
+          sendJson(res, 400, { success: false, error: aiErr.message });
         }
         return;
       }

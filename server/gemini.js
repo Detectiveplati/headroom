@@ -381,3 +381,79 @@ Input: ${JSON.stringify(compactItems)}`;
     newRules,
   };
 }
+
+/**
+ * Ultra-low token Gemini 3.1 Flash-Lite title beautifier.
+ * Converts verbose, unstructured titles into concise, action-oriented task titles (max 5 words).
+ * Returns plain text to avoid JSON structure overhead.
+ */
+export async function beautifyTitleWithGemini({ title }) {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+
+  if (!apiKey) {
+    throw new Error(
+      'GEMINI_API_KEY is not configured. Please set the GEMINI_API_KEY environment variable in your .env file or host environment.'
+    );
+  }
+
+  const cleanInput = (title || '').trim();
+  if (!cleanInput) {
+    throw new Error('No title provided to beautify.');
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+  const requestBody = {
+    contents: [
+      {
+        parts: [
+          {
+            text: `Rewrite to be concise, clear, action-oriented (max 5 words):\n${cleanInput}`,
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 20,
+      responseMimeType: 'text/plain',
+    },
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = `Gemini API returned status ${response.status}`;
+    try {
+      const errJson = JSON.parse(errorText);
+      if (errJson.error?.message) {
+        errorMessage = errJson.error.message;
+      }
+    } catch {
+      // Fallback
+    }
+    throw new Error(`Gemini Beautification failed: ${errorMessage}`);
+  }
+
+  const result = await response.json();
+  const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!rawText) {
+    throw new Error('Gemini did not return a beautified title.');
+  }
+
+  // Clean leading/trailing quotes, markdown backticks, or trailing periods
+  let beautified = rawText.trim();
+  beautified = beautified.replace(/^["'`]+|["'`]+$/g, '').replace(/[.]+$/g, '').trim();
+
+  return {
+    suggestedTitle: beautified || cleanInput,
+  };
+}

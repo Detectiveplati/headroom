@@ -24,6 +24,7 @@ interface KanbanColumnProps {
   onMoveTask: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateColor?: (taskId: string, color: TaskColor) => void;
+  onUpdateTitle?: (taskId: string, newTitle: string) => void;
   onQuickAddTask: (columnId: ColumnId, title: string) => void;
   onToggleTimer: (taskId: string) => void;
   onFocusTask: (taskId: string) => void;
@@ -40,6 +41,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onMoveTask,
   onToggleSubtask,
   onUpdateColor,
+  onUpdateTitle,
   onQuickAddTask,
   onToggleTimer,
   onFocusTask,
@@ -237,6 +239,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
                         onMove={onMoveTask}
                         onToggleSubtask={onToggleSubtask}
                         onUpdateColor={onUpdateColor}
+                        onUpdateTitle={onUpdateTitle}
                         onToggleTimer={onToggleTimer}
                         onFocusTask={onFocusTask}
                         onDragStart={onDragStart}
@@ -258,6 +261,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               onMove={onMoveTask}
               onToggleSubtask={onToggleSubtask}
               onUpdateColor={onUpdateColor}
+              onUpdateTitle={onUpdateTitle}
               onToggleTimer={onToggleTimer}
               onFocusTask={onFocusTask}
               onDragStart={onDragStart}

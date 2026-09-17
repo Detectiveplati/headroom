@@ -13,6 +13,7 @@ interface KanbanBoardProps {
   onMoveTask: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateColor?: (taskId: string, color: TaskColor) => void;
+  onUpdateTitle?: (taskId: string, newTitle: string) => void;
   onQuickAddTask: (columnId: ColumnId, title: string, context?: TaskContext) => void;
   onToggleTimer: (taskId: string) => void;
   onFocusTask: (taskId: string) => void;
@@ -29,6 +30,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onMoveTask,
   onToggleSubtask,
   onUpdateColor,
+  onUpdateTitle,
   onQuickAddTask,
   onToggleTimer,
   onFocusTask,
@@ -240,6 +242,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             }}
             onToggleSubtask={onToggleSubtask}
             onUpdateColor={onUpdateColor}
+            onUpdateTitle={onUpdateTitle}
             onQuickAddTask={(colId, title) => {
               const defaultCtx = activeContext === 'personal' ? 'personal' : 'work';
               onQuickAddTask(colId, title, defaultCtx);

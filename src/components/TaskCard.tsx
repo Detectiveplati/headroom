@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Task, ColumnId, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST, getTaskColorConfig } from '../utils/cardColors';
+import { AiBeautifyButton } from './AiBeautifyButton';
 
 interface TaskCardProps {
   task: Task;
@@ -30,6 +31,7 @@ interface TaskCardProps {
   onMove: (taskId: string, targetCol: ColumnId) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onUpdateColor?: (taskId: string, color: TaskColor) => void;
+  onUpdateTitle?: (taskId: string, newTitle: string) => void;
   onToggleTimer?: (taskId: string) => void;
   onFocusTask?: (taskId: string) => void;
   onDragStart: (e: React.DragEvent, taskId: string) => void;
@@ -45,6 +47,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   onMove,
   onToggleSubtask,
   onUpdateColor,
+  onUpdateTitle,
   onToggleTimer,
   onFocusTask,
   onDragStart,
@@ -228,15 +231,31 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         </div>
 
-        {/* Title */}
-        <h4 
-          onClick={() => onEdit(task)}
-          className={`text-sm font-medium leading-snug cursor-pointer hover:text-brand-600 dark:hover:text-brand-300 transition line-clamp-2 ${
-            task.columnId === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-800 dark:text-zinc-100'
-          }`}
-        >
-          {task.title}
-        </h4>
+        {/* Title row with AI Beautify symbol */}
+        <div className="flex items-start justify-between gap-1.5 group/title">
+          <h4 
+            onClick={() => onEdit(task)}
+            className={`flex-1 text-sm font-medium leading-snug cursor-pointer hover:text-brand-600 dark:hover:text-brand-300 transition line-clamp-2 ${
+              task.columnId === 'done' ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-800 dark:text-zinc-100'
+            }`}
+          >
+            {task.title}
+          </h4>
+
+          {onUpdateTitle && task.columnId !== 'done' && (
+            <div 
+              className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0 pt-0.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <AiBeautifyButton
+                title={task.title}
+                onApply={(newTitle) => onUpdateTitle(task.id, newTitle)}
+                size="xs"
+                tooltipPosition="bottom"
+              />
+            </div>
+          )}
+        </div>
 
         {/* Optional Description snippet */}
         {task.description && (

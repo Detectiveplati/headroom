@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Task, Subtask, Priority, ColumnId, TaskContext, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST } from '../utils/cardColors';
+import { AiBeautifyButton } from './AiBeautifyButton';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -154,9 +155,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Title */}
           <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              Task Title <span className="text-brand-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Task Title <span className="text-brand-500">*</span>
+              </label>
+              {title.trim() && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-zinc-400">AI Beautify:</span>
+                  <AiBeautifyButton
+                    title={title}
+                    onApply={(newTitle) => setTitle(newTitle)}
+                    size="xs"
+                    tooltipPosition="bottom"
+                  />
+                </div>
+              )}
+            </div>
             <input
               type="text"
               required

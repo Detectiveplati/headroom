@@ -14,7 +14,7 @@ import {
   saveCategoryRule,
   saveCategoryRulesBatch
 } from './server/db.js';
-import { parseStatementWithGemini, categorizeUnknownTransactions } from './server/gemini.js';
+import { parseStatementWithGemini, categorizeUnknownTransactions, beautifyTitleWithGemini } from './server/gemini.js';
 
 function syncApiPlugin(): Plugin {
   return {
@@ -251,6 +251,27 @@ function syncApiPlugin(): Plugin {
             res.end(JSON.stringify({ success: true, categorized: result.categorized, newRules: result.newRules }));
           } catch (catErr: unknown) {
             const errMessage = catErr instanceof Error ? catErr.message : 'Unknown AI categorization error';
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: errMessage }));
+          }
+          return;
+        }
+
+        // POST /api/tasks/beautify-title
+        if (pathname === '/api/tasks/beautify-title' && req.method === 'POST') {
+          const payload = await readBody();
+          const { title } = payload || {};
+          if (!title || typeof title !== 'string' || !title.trim()) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, error: 'A valid title string is required' }));
+            return;
+          }
+          try {
+            const result = await beautifyTitleWithGemini({ title: title.trim() });
+            res.statusCode = 200;
+            res.end(JSON.stringify({ success: true, ...result }));
+          } catch (aiErr: unknown) {
+            const errMessage = aiErr instanceof Error ? aiErr.message : 'Unknown AI beautification error';
             res.statusCode = 400;
             res.end(JSON.stringify({ success: false, error: errMessage }));
           }

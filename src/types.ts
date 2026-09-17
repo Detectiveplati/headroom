@@ -170,3 +170,14 @@ export interface CategorizedRuleResult {
   suggestedRegex: string;
   type: TransactionType;
 }
+
+export interface BeautifyTitleRequest {
+  title: string;
+}
+
+export interface BeautifyTitleResponse {
+  success: boolean;
+  suggestedTitle?: string;
+  error?: string;
+}
+

@@ -536,6 +536,13 @@ export const App: React.FC = () => {
     );
   }, []);
 
+  // Update Task Title (e.g. from AI Beautify)
+  const handleUpdateTaskTitle = useCallback((taskId: string, newTitle: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, title: newTitle.trim() } : t))
+    );
+  }, []);
+
   // Quick Add Task in Column
   const handleQuickAddTask = useCallback((columnId: ColumnId, title: string, context?: TaskContext) => {
     const defaultCtx = context || (activeContext === 'personal' ? 'personal' : 'work');
@@ -705,6 +712,7 @@ export const App: React.FC = () => {
             onMoveTask={handleMoveTask}
             onToggleSubtask={handleToggleSubtask}
             onUpdateColor={handleUpdateTaskColor}
+            onUpdateTitle={handleUpdateTaskTitle}
             onQuickAddTask={handleQuickAddTask}
             onToggleTimer={handleToggleTimer}
             onFocusTask={(taskId) => setActiveTaskId(taskId)}
