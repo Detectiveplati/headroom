@@ -17,7 +17,8 @@ import {
   Briefcase,
   Home,
   Zap,
-  Palette
+  Palette,
+  FolderGit2
 } from 'lucide-react';
 import { Task, ColumnId, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST, getTaskColorConfig } from '../utils/cardColors';
@@ -174,6 +175,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 border border-blue-500/20">
                 <Briefcase className="w-2.5 h-2.5" />
                 Work
+              </span>
+            )}
+
+            {/* Project Module Link Badge */}
+            {task.linkedProjectId && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20" title="Synchronized with Project Management module">
+                <FolderGit2 className="w-2.5 h-2.5" />
+                Project
               </span>
             )}
 

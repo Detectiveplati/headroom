@@ -3,7 +3,8 @@ import {
   Project, 
   ProjectModule, 
   ModuleScopeItem, 
-  ModuleStatus 
+  ModuleStatus,
+  Task
 } from '../../types';
 import { ModuleCard } from './ModuleCard';
 import { ModuleModal } from './ModuleModal';
@@ -24,14 +25,18 @@ import {
 
 interface ProjectManagementDashboardProps {
   projects: Project[];
+  tasks: Task[];
   onUpdateProjects: (projects: Project[]) => void;
   onPromoteToKanban: (module: ProjectModule, item: ModuleScopeItem) => void;
+  onUpdateScopeItem: (module: ProjectModule, item: ModuleScopeItem, newTitle: string, newDetails?: string) => void;
 }
 
 export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProps> = ({
   projects,
+  tasks,
   onUpdateProjects,
   onPromoteToKanban,
+  onUpdateScopeItem,
 }) => {
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
     return projects.length > 0 ? projects[0].id : '';
@@ -189,14 +194,10 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
   // Delete Active Project
   const handleDeleteActiveProject = () => {
     if (!activeProject) return;
-    if (projects.length <= 1) {
-      alert('You must keep at least one project.');
-      return;
-    }
     if (window.confirm(`Are you sure you want to delete project "${activeProject.name}" and all its modules?`)) {
       const remaining = projects.filter((p) => p.id !== activeProject.id);
       onUpdateProjects(remaining);
-      setActiveProjectId(remaining[0].id);
+      setActiveProjectId(remaining.length > 0 ? remaining[0].id : '');
     }
   };
 
@@ -220,6 +221,100 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
     onUpdateProjects([formatted, ...projects]);
     setActiveProjectId(formatted.id);
   };
+
+  // Clean empty state when no projects exist
+  if (projects.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center max-w-lg mx-auto px-4 py-20 text-center space-y-5 animate-in fade-in duration-200">
+        <div className="h-16 w-16 rounded-3xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-600 dark:text-brand-400 shadow-lg shadow-brand-500/10">
+          <FolderPlus className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
+            Clean Project Workspace
+          </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+            Your project management dashboard is fresh and clean. Create your first project to start tracking your modules, completed features, and missing scope.
+          </p>
+        </div>
+        <button
+          onClick={() => setIsNewProjectModalOpen(true)}
+          className="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-md shadow-brand-500/20 transition flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Create First Project</span>
+        </button>
+
+        {/* New Project Modal */}
+        {isNewProjectModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div 
+              className="w-full max-w-md bg-offwhite-surface dark:bg-[#12151f] rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 space-y-4 text-left"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-zinc-900 dark:text-white">
+                  Create New Project
+                </h2>
+                <button
+                  onClick={() => setIsNewProjectModalOpen(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                >
+                  <span className="text-lg">×</span>
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateProject} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider mb-1">
+                    Project Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="e.g. chillios or Headroom v2"
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={newProjectDesc}
+                    onChange={(e) => setNewProjectDesc(e.target.value)}
+                    placeholder="Brief description of the app or project..."
+                    className="w-full text-xs px-3 py-2 rounded-xl bg-offwhite-subtle dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-brand-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsNewProjectModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-brand-600 hover:bg-brand-500 text-white shadow-md shadow-brand-500/20 transition"
+                  >
+                    Create Project
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -290,15 +385,13 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
             <span>New Module</span>
           </button>
 
-          {projects.length > 1 && (
-            <button
-              onClick={handleDeleteActiveProject}
-              className="p-2 rounded-xl text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition border border-transparent hover:border-red-200 dark:hover:border-red-900/50"
-              title="Delete Active Project"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            onClick={handleDeleteActiveProject}
+            className="p-2 rounded-xl text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition border border-transparent hover:border-red-200 dark:hover:border-red-900/50"
+            title="Delete Active Project"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -439,6 +532,7 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
               key={mod.id}
               module={mod}
               projectName={activeProject?.name || 'Project'}
+              tasks={tasks}
               onUpdateModule={handleUpdateModule}
               onDeleteModule={handleDeleteModule}
               onEditModule={(m) => {
@@ -446,6 +540,7 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
                 setIsModuleModalOpen(true);
               }}
               onPromoteToKanban={onPromoteToKanban}
+              onUpdateScopeItem={onUpdateScopeItem}
             />
           ))}
         </div>
@@ -476,7 +571,7 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
       {isNewProjectModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div 
-            className="w-full max-w-md bg-offwhite-surface dark:bg-[#12151f] rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 space-y-4"
+            className="w-full max-w-md bg-offwhite-surface dark:bg-[#12151f] rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 space-y-4 text-left"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -487,7 +582,6 @@ export const ProjectManagementDashboard: React.FC<ProjectManagementDashboardProp
                 onClick={() => setIsNewProjectModalOpen(false)}
                 className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
               >
-                <Trash2 className="w-0 h-0 hidden" />
                 <span className="text-lg">×</span>
               </button>
             </div>

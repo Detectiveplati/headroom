@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { 
   ProjectModule, 
   ModuleScopeItem, 
-  ModuleStatus 
+  ModuleStatus,
+  Task
 } from '../../types';
 import { 
   CheckCircle2, 
@@ -13,30 +14,44 @@ import {
   Check, 
   AlertCircle, 
   Send,
-  Tag
+  Tag,
+  Lock,
+  MessageSquare
 } from 'lucide-react';
 
 interface ModuleCardProps {
   module: ProjectModule;
   projectName: string;
+  tasks: Task[];
   onUpdateModule: (updated: ProjectModule) => void;
   onDeleteModule: (moduleId: string) => void;
   onEditModule: (module: ProjectModule) => void;
   onPromoteToKanban: (module: ProjectModule, item: ModuleScopeItem) => void;
+  onUpdateScopeItem: (module: ProjectModule, item: ModuleScopeItem, newTitle: string, newDetails?: string) => void;
 }
 
 export const ModuleCard: React.FC<ModuleCardProps> = ({
   module,
   projectName,
+  tasks,
   onUpdateModule,
   onDeleteModule,
   onEditModule,
   onPromoteToKanban,
+  onUpdateScopeItem,
 }) => {
   const [newMissingTitle, setNewMissingTitle] = useState('');
   const [newDoneTitle, setNewDoneTitle] = useState('');
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [showDoneList, setShowDoneList] = useState(true);
+
+  // Inline editing state for individual scope items
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItemTitle, setEditingItemTitle] = useState('');
+  const [editingItemDetails, setEditingItemDetails] = useState('');
+
+  // Transient feedback state when user clicks "To Board"
+  const [justSentItemId, setJustSentItemId] = useState<string | null>(null);
 
   // Completion calculation
   const doneCount = module.doneItems.length;
@@ -65,6 +80,36 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
       case 'in-progress': return 'In Progress';
       case 'review': return 'Review';
       case 'planning': return 'Planning';
+    }
+  };
+
+  // Get status of item on Kanban board (if sent)
+  const getLinkedTaskStatus = (item: ModuleScopeItem) => {
+    if (!item.linkedTaskId) return null;
+    const linked = tasks.find((t) => t.id === item.linkedTaskId);
+    if (!linked) return null;
+
+    switch (linked.columnId) {
+      case 'doing':
+        return {
+          label: 'On Board: In Progress',
+          color: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30',
+        };
+      case 'today':
+        return {
+          label: 'On Board: Today',
+          color: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30',
+        };
+      case 'backlog':
+        return {
+          label: 'On Board: Backlog',
+          color: 'bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30',
+        };
+      case 'done':
+        return {
+          label: 'On Board: Done',
+          color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+        };
     }
   };
 
@@ -164,9 +209,37 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
     }
   };
 
+  // Item inline edit handlers
+  const startEditingItem = (item: ModuleScopeItem) => {
+    setEditingItemId(item.id);
+    setEditingItemTitle(item.title);
+    setEditingItemDetails(item.details || '');
+  };
+
+  const cancelEditingItem = () => {
+    setEditingItemId(null);
+    setEditingItemTitle('');
+    setEditingItemDetails('');
+  };
+
+  const saveEditingItem = (item: ModuleScopeItem) => {
+    if (!editingItemTitle.trim()) return;
+    onUpdateScopeItem(module, item, editingItemTitle.trim(), editingItemDetails.trim() || undefined);
+    setEditingItemId(null);
+  };
+
+  // Promote to board with feedback & locking
+  const handleSendToBoard = (item: ModuleScopeItem) => {
+    setJustSentItemId(item.id);
+    onPromoteToKanban(module, item);
+    setTimeout(() => {
+      setJustSentItemId((curr) => (curr === item.id ? null : curr));
+    }, 2200);
+  };
+
   // Copy AI coding prompt for LLM
   const handleCopyAiPrompt = () => {
-    const promptText = `### Project: ${projectName}\n### Module: ${module.name} (${percentage}% Complete)\n${module.summary ? `Summary: ${module.summary}\n` : ''}${module.techStack?.length ? `Tech Stack: ${module.techStack.join(', ')}\n` : ''}\n**Implemented Features (Done):**\n${module.doneItems.map((d) => `- [x] ${d.title}`).join('\n') || '- None yet'}\n\n**Missing / Pending Deliverables:**\n${module.missingItems.map((m) => `- [ ] ${m.title}`).join('\n') || '- All deliverables complete!'}\n\n${module.notes ? `**Notes / Constraints:**\n${module.notes}\n\n` : ''}**Task for Assistant:**\nPlease review the current implementation status and help me implement the missing items above. Provide clear, modular code snippets with strict types and tests.`;
+    const promptText = `### Project: ${projectName}\n### Module: ${module.name} (${percentage}% Complete)\n${module.summary ? `Summary: ${module.summary}\n` : ''}${module.techStack?.length ? `Tech Stack: ${module.techStack.join(', ')}\n` : ''}\n**Implemented Features (Done):**\n${module.doneItems.map((d) => `- [x] ${d.title}${d.details ? ` (${d.details})` : ''}`).join('\n') || '- None yet'}\n\n**Missing / Pending Deliverables:**\n${module.missingItems.map((m) => `- [ ] ${m.title}${m.details ? ` (${m.details})` : ''}`).join('\n') || '- All deliverables complete!'}\n\n${module.notes ? `**Notes / Constraints:**\n${module.notes}\n\n` : ''}**Task for Assistant:**\nPlease review the current implementation status and help me implement the missing items above. Provide clear, modular code snippets with strict types and tests.`;
 
     navigator.clipboard.writeText(promptText);
     setCopiedPrompt(true);
@@ -311,36 +384,106 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
           </div>
 
           {showDoneList && (
-            <div className="space-y-1.5 flex-1 min-h-[80px]">
+            <div className="space-y-2 flex-1 min-h-[80px]">
               {module.doneItems.length === 0 ? (
                 <div className="h-full flex items-center justify-center p-3 text-center text-xs text-zinc-400 dark:text-zinc-500 italic border border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
                   No completed deliverables yet. Check off items on the right as you build!
                 </div>
               ) : (
-                module.doneItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="group flex items-start gap-2 p-2 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-emerald-500/30 transition text-xs"
-                  >
-                    <button
-                      onClick={() => handleMarkItemMissing(item)}
-                      className="mt-0.5 text-emerald-500 hover:text-amber-500 transition shrink-0"
-                      title="Move back to Missing"
+                module.doneItems.map((item) => {
+                  const isEditing = editingItemId === item.id;
+                  const linkedStatus = getLinkedTaskStatus(item);
+
+                  if (isEditing) {
+                    return (
+                      <div key={item.id} className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-emerald-500/50 shadow-sm space-y-2 text-xs">
+                        <input
+                          type="text"
+                          value={editingItemTitle}
+                          onChange={(e) => setEditingItemTitle(e.target.value)}
+                          className="w-full text-xs font-medium px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-900 dark:text-zinc-100"
+                          placeholder="Feature title..."
+                          autoFocus
+                        />
+                        <textarea
+                          rows={2}
+                          value={editingItemDetails}
+                          onChange={(e) => setEditingItemDetails(e.target.value)}
+                          className="w-full text-[11px] px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
+                          placeholder="Comments, notes, or implementation details..."
+                        />
+                        <div className="flex items-center justify-end gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={cancelEditingItem}
+                            className="px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveEditingItem(item)}
+                            className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-xs"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="group flex flex-col gap-1 p-2 rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-emerald-500/30 transition text-xs"
                     >
-                      <CheckCircle2 className="w-4 h-4" />
-                    </button>
-                    <span className="flex-1 text-zinc-700 dark:text-zinc-300 line-through opacity-85 leading-snug">
-                      {item.title}
-                    </span>
-                    <button
-                      onClick={() => handleDeleteItem(item.id, true)}
-                      className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 transition shrink-0 p-0.5"
-                      title="Remove item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))
+                      <div className="flex items-start gap-2">
+                        <button
+                          onClick={() => handleMarkItemMissing(item)}
+                          className="mt-0.5 text-emerald-500 hover:text-amber-500 transition shrink-0"
+                          title="Move back to Missing"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                        <span className="flex-1 text-zinc-700 dark:text-zinc-300 line-through opacity-85 leading-snug">
+                          {item.title}
+                        </span>
+
+                        {/* Linked status badge or actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {linkedStatus && (
+                            <span className={`px-1.5 py-0.5 rounded border text-[10px] font-mono font-medium flex items-center gap-1 ${linkedStatus.color}`}>
+                              <Lock className="w-2.5 h-2.5" />
+                              <span>{linkedStatus.label}</span>
+                            </span>
+                          )}
+                          <button
+                            onClick={() => startEditingItem(item)}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition p-0.5"
+                            title="Edit Title & Comments"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id, true)}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 transition p-0.5"
+                            title="Remove item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Display comments/details if any */}
+                      {item.details && (
+                        <div className="ml-6 mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400 bg-zinc-100/60 dark:bg-zinc-800/40 px-2 py-1 rounded-md border border-zinc-200/40 dark:border-zinc-700/40 flex items-start gap-1.5">
+                          <MessageSquare className="w-3 h-3 text-zinc-400 shrink-0 mt-0.5" />
+                          <span className="italic leading-relaxed">{item.details}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
@@ -382,49 +525,128 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
             </span>
           </div>
 
-          <div className="space-y-1.5 flex-1 min-h-[80px]">
+          <div className="space-y-2 flex-1 min-h-[80px]">
             {module.missingItems.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center p-3 text-center text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 border border-dashed border-emerald-300 dark:border-emerald-800/60 rounded-xl">
                 <CheckCircle2 className="w-5 h-5 mb-1" />
                 <span>All planned items implemented for this module!</span>
               </div>
             ) : (
-              module.missingItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="group flex items-start gap-2 p-2 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-amber-500/40 transition text-xs shadow-xs"
-                >
-                  <button
-                    onClick={() => handleMarkItemDone(item)}
-                    className="mt-0.5 text-zinc-400 hover:text-emerald-500 transition shrink-0"
-                    title="Mark Done"
-                  >
-                    <Circle className="w-4 h-4" />
-                  </button>
-                  <span className="flex-1 text-zinc-800 dark:text-zinc-200 font-medium leading-snug">
-                    {item.title}
-                  </span>
+              module.missingItems.map((item) => {
+                const isEditing = editingItemId === item.id;
+                const isJustSent = justSentItemId === item.id;
+                const linkedStatus = getLinkedTaskStatus(item);
 
-                  {/* Actions for Missing Item */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => onPromoteToKanban(module, item)}
-                      className="px-2 py-0.5 rounded-md bg-brand-500/10 hover:bg-brand-500/20 text-brand-700 dark:text-brand-300 border border-brand-500/25 transition text-[10px] font-medium flex items-center gap-1"
-                      title="Promote this missing item to Headroom Kanban Focus Board"
-                    >
-                      <Send className="w-2.5 h-2.5" />
-                      <span>To Board</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteItem(item.id, false)}
-                      className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 transition p-0.5"
-                      title="Delete item"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                if (isEditing) {
+                  return (
+                    <div key={item.id} className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-brand-500/50 shadow-sm space-y-2 text-xs">
+                      <input
+                        type="text"
+                        value={editingItemTitle}
+                        onChange={(e) => setEditingItemTitle(e.target.value)}
+                        className="w-full text-xs font-medium px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-500 text-zinc-900 dark:text-zinc-100"
+                        placeholder="Missing feature or edge case..."
+                        autoFocus
+                      />
+                      <textarea
+                        rows={2}
+                        value={editingItemDetails}
+                        onChange={(e) => setEditingItemDetails(e.target.value)}
+                        className="w-full text-[11px] px-2 py-1 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-500 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
+                        placeholder="Comments, notes, or implementation details..."
+                      />
+                      <div className="flex items-center justify-end gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={cancelEditingItem}
+                          className="px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveEditingItem(item)}
+                          className="px-2.5 py-1 text-[11px] font-semibold bg-brand-600 hover:bg-brand-500 text-white rounded-lg transition shadow-xs"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={item.id}
+                    className="group flex flex-col gap-1 p-2 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-amber-500/40 transition text-xs shadow-xs"
+                  >
+                    <div className="flex items-start gap-2">
+                      <button
+                        onClick={() => handleMarkItemDone(item)}
+                        className="mt-0.5 text-zinc-400 hover:text-emerald-500 transition shrink-0"
+                        title="Mark Done"
+                      >
+                        <Circle className="w-4 h-4" />
+                      </button>
+                      <span className="flex-1 text-zinc-800 dark:text-zinc-200 font-medium leading-snug">
+                        {item.title}
+                      </span>
+
+                      {/* Actions & Status for Missing Item */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Status Feedback: Sent Flash, Locked Badge, or Active To Board Button */}
+                        {isJustSent ? (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 text-[10px] font-semibold flex items-center gap-1 animate-pulse">
+                            <Check className="w-3 h-3" />
+                            <span>Sent to Board!</span>
+                          </span>
+                        ) : linkedStatus ? (
+                          <span
+                            className={`px-2 py-0.5 rounded-md border text-[10px] font-mono font-medium flex items-center gap-1 cursor-default ${linkedStatus.color}`}
+                            title="Locked: This deliverable is already on the board and synced bidirectionally"
+                          >
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>{linkedStatus.label}</span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleSendToBoard(item)}
+                            className="px-2 py-0.5 rounded-md bg-brand-500/10 hover:bg-brand-500/20 text-brand-700 dark:text-brand-300 border border-brand-500/25 transition text-[10px] font-medium flex items-center gap-1"
+                            title="Promote this missing item to Headroom Kanban Focus Board"
+                          >
+                            <Send className="w-2.5 h-2.5" />
+                            <span>To Board</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => startEditingItem(item)}
+                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition p-0.5"
+                          title="Edit Title & Comments"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteItem(item.id, false)}
+                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 transition p-0.5"
+                          title="Delete item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Display comments/details if any */}
+                    {item.details && (
+                      <div className="ml-6 mt-0.5 text-[11px] text-zinc-600 dark:text-zinc-400 bg-zinc-100/70 dark:bg-zinc-800/50 px-2 py-1 rounded-md border border-zinc-200/50 dark:border-zinc-700/50 flex items-start gap-1.5">
+                        <MessageSquare className="w-3 h-3 text-brand-500 shrink-0 mt-0.5" />
+                        <span className="italic leading-relaxed">{item.details}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

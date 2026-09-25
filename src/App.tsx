@@ -507,6 +507,38 @@ export const App: React.FC = () => {
     );
   }, [tasks]);
 
+  const revertLinkedModuleItemToMissing = useCallback((revertedTaskId: string) => {
+    const targetTask = tasks.find((t) => t.id === revertedTaskId);
+    if (!targetTask?.linkedProjectId || !targetTask?.linkedScopeItemId) return;
+
+    setProjects((prev) =>
+      prev.map((proj) => {
+        if (proj.id !== targetTask.linkedProjectId) return proj;
+        return {
+          ...proj,
+          modules: proj.modules.map((mod) => {
+            if (mod.id !== targetTask.linkedModuleId) return mod;
+            const foundDone = mod.doneItems.find((di) => di.id === targetTask.linkedScopeItemId);
+            if (!foundDone) return mod;
+            return {
+              ...mod,
+              doneItems: mod.doneItems.filter((di) => di.id !== targetTask.linkedScopeItemId),
+              missingItems: [
+                ...mod.missingItems,
+                {
+                  ...foundDone,
+                  completed: false,
+                  completedAt: undefined,
+                },
+              ],
+              updatedAt: Date.now(),
+            };
+          }),
+        };
+      })
+    );
+  }, [tasks]);
+
   const handleCompleteTask = useCallback((taskId: string) => {
     setTasks((prev) =>
       prev.map((t) =>
@@ -535,11 +567,14 @@ export const App: React.FC = () => {
 
         const isMovingToDone = targetCol === 'done';
         const isMovingToDoing = targetCol === 'doing';
+        const wasInDone = t.columnId === 'done';
 
         if (isMovingToDone) {
           checkOffLinkedModuleItem(taskId);
           soundManager.playCompleteChime();
           triggerConfetti();
+        } else if (wasInDone) {
+          revertLinkedModuleItemToMissing(taskId);
         }
 
         return {
@@ -554,7 +589,7 @@ export const App: React.FC = () => {
     if (targetCol === 'doing') {
       setActiveTaskId(taskId);
     }
-  }, [settings.autoStartTimerOnDoing, triggerConfetti, checkOffLinkedModuleItem]);
+  }, [settings.autoStartTimerOnDoing, triggerConfetti, checkOffLinkedModuleItem, revertLinkedModuleItemToMissing]);
 
   // Timer Toggle
   const handleToggleTimer = useCallback((taskId: string) => {
@@ -635,11 +670,35 @@ export const App: React.FC = () => {
 
   // Delete Task
   const handleDeleteTask = useCallback((taskId: string) => {
+    const targetTask = tasks.find((t) => t.id === taskId);
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     if (activeTaskId === taskId) {
       setActiveTaskId(null);
     }
-  }, [activeTaskId]);
+
+    // If task was linked to a project module, clear linkedTaskId so it can be re-sent if needed
+    if (targetTask?.linkedProjectId && targetTask?.linkedScopeItemId) {
+      setProjects((prev) =>
+        prev.map((proj) => {
+          if (proj.id !== targetTask.linkedProjectId) return proj;
+          return {
+            ...proj,
+            modules: proj.modules.map((mod) => {
+              if (mod.id !== targetTask.linkedModuleId) return mod;
+              const clearLink = (item: ModuleScopeItem) =>
+                item.id === targetTask.linkedScopeItemId ? { ...item, linkedTaskId: undefined } : item;
+              return {
+                ...mod,
+                missingItems: mod.missingItems.map(clearLink),
+                doneItems: mod.doneItems.map(clearLink),
+                updatedAt: Date.now(),
+              };
+            }),
+          };
+        })
+      );
+    }
+  }, [activeTaskId, tasks]);
 
   // Save / Edit Task from Modal
   const handleSaveTaskModal = useCallback((taskData: Partial<Task>) => {
@@ -647,6 +706,44 @@ export const App: React.FC = () => {
       setTasks((prev) =>
         prev.map((t) => (t.id === editingTask.id ? { ...t, ...taskData } : t))
       );
+
+      // If this task is linked to a project scope item, sync comments/description and title back to project area!
+      if (editingTask.linkedProjectId && editingTask.linkedScopeItemId) {
+        setProjects((prevProjects) =>
+          prevProjects.map((p) => {
+            if (p.id !== editingTask.linkedProjectId) return p;
+            return {
+              ...p,
+              modules: p.modules.map((m) => {
+                if (m.id !== editingTask.linkedModuleId) return m;
+
+                let cleanTitle = taskData.title;
+                if (cleanTitle) {
+                  const prefixMatch = cleanTitle.match(/^\[.*?\]\s*(.*)$/);
+                  if (prefixMatch) cleanTitle = prefixMatch[1];
+                }
+
+                const syncItem = (it: ModuleScopeItem) => {
+                  if (it.id !== editingTask.linkedScopeItemId) return it;
+                  return {
+                    ...it,
+                    title: cleanTitle ? cleanTitle.trim() : it.title,
+                    details: taskData.description !== undefined ? taskData.description : it.details,
+                    updatedAt: Date.now(),
+                  };
+                };
+
+                return {
+                  ...m,
+                  missingItems: m.missingItems.map(syncItem),
+                  doneItems: m.doneItems.map(syncItem),
+                  updatedAt: Date.now(),
+                };
+              }),
+            };
+          })
+        );
+      }
     } else {
       const newTask: Task = {
         id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -669,6 +766,55 @@ export const App: React.FC = () => {
       }
     }
   }, [editingTask, settings.autoStartTimerOnDoing, activeContext]);
+
+  // Update Scope Item directly from Project Management area
+  const handleUpdateScopeItem = useCallback((
+    module: ProjectModule,
+    item: ModuleScopeItem,
+    newTitle: string,
+    newDetails?: string
+  ) => {
+    // 1. Update in projects state
+    setProjects((prevProjects) =>
+      prevProjects.map((p) =>
+        p.id === module.projectId
+          ? {
+              ...p,
+              modules: p.modules.map((m) => {
+                if (m.id !== module.id) return m;
+                const updateList = (list: ModuleScopeItem[]) =>
+                  list.map((it) =>
+                    it.id === item.id
+                      ? { ...it, title: newTitle, details: newDetails, updatedAt: Date.now() }
+                      : it
+                  );
+                return {
+                  ...m,
+                  missingItems: updateList(m.missingItems),
+                  doneItems: updateList(m.doneItems),
+                  updatedAt: Date.now(),
+                };
+              }),
+            }
+          : p
+      )
+    );
+
+    // 2. If this item has a linked task on the Kanban board, sync changes directly back to the task!
+    if (item.linkedTaskId) {
+      setTasks((prevTasks) =>
+        prevTasks.map((t) =>
+          t.id === item.linkedTaskId
+            ? {
+                ...t,
+                title: `[${module.name}] ${newTitle}`,
+                description: newDetails !== undefined ? newDetails : t.description,
+              }
+            : t
+        )
+      );
+    }
+  }, []);
 
   // WIP Violation Trigger
   const handleWipViolation = useCallback((task: Task) => {
@@ -838,8 +984,10 @@ export const App: React.FC = () => {
         ) : activeTab === 'projects' ? (
           <ProjectManagementDashboard
             projects={projects}
+            tasks={tasks}
             onUpdateProjects={setProjects}
             onPromoteToKanban={handlePromoteScopeItemToTask}
+            onUpdateScopeItem={handleUpdateScopeItem}
           />
         ) : (
           <ExpenseDashboard
