@@ -57,6 +57,12 @@ export const HelpShortcutsModal: React.FC<HelpShortcutsModalProps> = ({ isOpen, 
                 </kbd>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-zinc-200/80 dark:border-zinc-800/60">
+                <span className="text-zinc-700 dark:text-zinc-300">Switch to Projects & Modules</span>
+                <kbd className="font-mono bg-offwhite-card dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-xs dark:shadow-none">
+                  Alt + 3
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-zinc-200/80 dark:border-zinc-800/60">
                 <span className="text-zinc-700 dark:text-zinc-300">Switch to Financial Headroom</span>
                 <kbd className="font-mono bg-offwhite-card dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 text-[11px] shadow-xs dark:shadow-none">
                   Alt + 2

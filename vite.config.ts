@@ -167,7 +167,7 @@ function syncApiPlugin(): Plugin {
           }
 
           const payload = await readBody();
-          const { tasks, settings, activeTaskId, updatedAt = Date.now(), force = false } = payload;
+          const { tasks, settings, activeTaskId, projects, updatedAt = Date.now(), force = false } = payload;
           if (!force) {
             const existing = await getBoard(boardKey);
             if (existing && existing.updatedAt && existing.updatedAt > updatedAt) {
@@ -180,6 +180,7 @@ function syncApiPlugin(): Plugin {
             tasks,
             settings,
             activeTaskId,
+            projects,
             updatedAt: Math.max(updatedAt, Date.now()),
           });
           res.statusCode = 200;

@@ -13,7 +13,10 @@ import {
   CardMetaInfo,
   TrackedAccount,
   MonthlyAccountUpload,
-  TaskColor
+  TaskColor,
+  Project,
+  ProjectModule,
+  ModuleScopeItem
 } from './types';
 import { 
   loadStoredTasks, 
@@ -34,7 +37,9 @@ import {
   loadStoredAccounts,
   saveStoredAccounts,
   loadStoredUploadLogs,
-  saveStoredUploadLogs
+  saveStoredUploadLogs,
+  loadStoredProjects,
+  saveStoredProjects
 } from './utils/storage';
 import { soundManager } from './utils/audio';
 import { getMeApi, logoutApi } from './utils/auth';
@@ -50,6 +55,7 @@ import { Sparkles } from 'lucide-react';
 import { FocusHUD } from './components/FocusHUD';
 import { KanbanBoard } from './components/KanbanBoard';
 import { ExpenseDashboard } from './components/expenses/ExpenseDashboard';
+import { ProjectManagementDashboard } from './components/projects/ProjectManagementDashboard';
 import { LoginPage } from './components/LoginPage';
 import { TaskModal } from './components/TaskModal';
 import { WipLimitModal } from './components/WipLimitModal';
@@ -63,8 +69,11 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(() => loadStoredSettings());
   const [activeTaskId, setActiveTaskId] = useState<string | null>(() => loadStoredActiveTaskId());
 
-  // Active App Mode (Tasks / Kanban vs Financial Headroom)
+  // Active App Mode (Tasks / Kanban vs Financial Headroom vs Projects)
   const [activeTab, setActiveTab] = useState<ActiveTab>('tasks');
+
+  // Projects & Modules state
+  const [projects, setProjects] = useState<Project[]>(() => loadStoredProjects());
 
   // Financial & Expense state
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -120,6 +129,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveStoredTasks(tasks);
   }, [tasks]);
+
+  // Sync projects to LocalStorage
+  useEffect(() => {
+    saveStoredProjects(projects);
+  }, [projects]);
 
   // Sync settings & sound manager
   useEffect(() => {
@@ -308,6 +322,10 @@ export const App: React.FC = () => {
           if (result.data.activeTaskId !== undefined) {
             setActiveTaskId(result.data.activeTaskId);
           }
+          if (Array.isArray(result.data.projects)) {
+            setProjects(result.data.projects);
+            saveStoredProjects(result.data.projects);
+          }
           lastLocalEditTimeRef.current = remoteTime;
           setTimeout(() => {
             isSyncingFromRemoteRef.current = false;
@@ -319,13 +337,14 @@ export const App: React.FC = () => {
           tasks,
           settings,
           activeTaskId,
+          projects,
           updatedAt: Date.now(),
         });
       }
     } else {
       setSyncStatus(result.status);
     }
-  }, [tasks, settings, activeTaskId]);
+  }, [tasks, settings, activeTaskId, projects]);
 
   // Initial mount sync
   useEffect(() => {
@@ -370,6 +389,7 @@ export const App: React.FC = () => {
         tasks,
         settings,
         activeTaskId,
+        projects,
         updatedAt: lastLocalEditTimeRef.current,
       });
 
@@ -382,6 +402,10 @@ export const App: React.FC = () => {
         setTasks(res.data.tasks || []);
         if (res.data.settings) setSettings(res.data.settings);
         if (res.data.activeTaskId !== undefined) setActiveTaskId(res.data.activeTaskId);
+        if (Array.isArray(res.data.projects)) {
+          setProjects(res.data.projects);
+          saveStoredProjects(res.data.projects);
+        }
         setSyncStatus('synced');
         setTimeout(() => {
           isSyncingFromRemoteRef.current = false;
@@ -394,7 +418,7 @@ export const App: React.FC = () => {
     return () => {
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     };
-  }, [tasks, settings, activeTaskId, boardKey]);
+  }, [tasks, settings, activeTaskId, projects, boardKey]);
 
   // Manual Force Push
   const handleForcePush = async () => {
@@ -403,6 +427,7 @@ export const App: React.FC = () => {
       tasks,
       settings,
       activeTaskId,
+      projects,
       updatedAt: Date.now(),
       force: true,
     });
@@ -450,6 +475,38 @@ export const App: React.FC = () => {
   }, [settings.confettiEnabled]);
 
   // Task Completion
+  const checkOffLinkedModuleItem = useCallback((completedTaskId: string) => {
+    const targetTask = tasks.find((t) => t.id === completedTaskId);
+    if (!targetTask?.linkedProjectId || !targetTask?.linkedScopeItemId) return;
+
+    setProjects((prev) =>
+      prev.map((proj) => {
+        if (proj.id !== targetTask.linkedProjectId) return proj;
+        return {
+          ...proj,
+          modules: proj.modules.map((mod) => {
+            if (mod.id !== targetTask.linkedModuleId) return mod;
+            const foundMissing = mod.missingItems.find((mi) => mi.id === targetTask.linkedScopeItemId);
+            if (!foundMissing) return mod;
+            return {
+              ...mod,
+              missingItems: mod.missingItems.filter((mi) => mi.id !== targetTask.linkedScopeItemId),
+              doneItems: [
+                ...mod.doneItems,
+                {
+                  ...foundMissing,
+                  completed: true,
+                  completedAt: Date.now(),
+                },
+              ],
+              updatedAt: Date.now(),
+            };
+          }),
+        };
+      })
+    );
+  }, [tasks]);
+
   const handleCompleteTask = useCallback((taskId: string) => {
     setTasks((prev) =>
       prev.map((t) =>
@@ -465,9 +522,10 @@ export const App: React.FC = () => {
       )
     );
 
+    checkOffLinkedModuleItem(taskId);
     soundManager.playCompleteChime();
     triggerConfetti();
-  }, [triggerConfetti]);
+  }, [triggerConfetti, checkOffLinkedModuleItem]);
 
   // Task Move
   const handleMoveTask = useCallback((taskId: string, targetCol: ColumnId) => {
@@ -479,6 +537,7 @@ export const App: React.FC = () => {
         const isMovingToDoing = targetCol === 'doing';
 
         if (isMovingToDone) {
+          checkOffLinkedModuleItem(taskId);
           soundManager.playCompleteChime();
           triggerConfetti();
         }
@@ -495,7 +554,7 @@ export const App: React.FC = () => {
     if (targetCol === 'doing') {
       setActiveTaskId(taskId);
     }
-  }, [settings.autoStartTimerOnDoing, triggerConfetti]);
+  }, [settings.autoStartTimerOnDoing, triggerConfetti, checkOffLinkedModuleItem]);
 
   // Timer Toggle
   const handleToggleTimer = useCallback((taskId: string) => {
@@ -617,6 +676,53 @@ export const App: React.FC = () => {
     setWipViolationTask(task);
   }, []);
 
+  // 1-Click Promote Missing Scope Item from Project Management to Kanban Board
+  const handlePromoteScopeItemToTask = useCallback((module: ProjectModule, item: ModuleScopeItem) => {
+    const tagPrefix = module.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+    const newTask: Task = {
+      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      title: `[${module.name}] ${item.title}`,
+      description: `Deliverable for ${module.name} (${module.version || 'v0.1'}).\n${module.summary || ''}`,
+      columnId: 'today',
+      priority: 'high',
+      context: activeContext === 'personal' ? 'personal' : 'work',
+      subtasks: [],
+      tags: ['Module', tagPrefix],
+      elapsedSeconds: 0,
+      isRunning: false,
+      createdAt: Date.now(),
+      linkedProjectId: module.projectId,
+      linkedModuleId: module.id,
+      linkedScopeItemId: item.id,
+    };
+
+    setTasks((prev) => [newTask, ...prev]);
+
+    // Update item's linkedTaskId in projects
+    setProjects((prevProjects) =>
+      prevProjects.map((p) =>
+        p.id === module.projectId
+          ? {
+              ...p,
+              modules: p.modules.map((m) =>
+                m.id === module.id
+                  ? {
+                      ...m,
+                      missingItems: m.missingItems.map((ms) =>
+                        ms.id === item.id ? { ...ms, linkedTaskId: newTask.id } : ms
+                      ),
+                      updatedAt: Date.now(),
+                    }
+                  : m
+              ),
+            }
+          : p
+      )
+    );
+
+    soundManager.playSubtaskCheck();
+  }, [activeContext]);
+
   // Keyboard Shortcuts Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -629,6 +735,9 @@ export const App: React.FC = () => {
       } else if (e.altKey && e.key === '2') {
         e.preventDefault();
         setActiveTab('expenses');
+      } else if (e.altKey && e.key === '3') {
+        e.preventDefault();
+        setActiveTab('projects');
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setEditingTask(null);
@@ -704,7 +813,7 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      {/* Main Content Area (Kanban vs Financial Headroom) */}
+      {/* Main Content Area (Kanban vs Projects vs Financial Headroom) */}
       <main className="flex-1 flex flex-col">
         {activeTab === 'tasks' ? (
           <KanbanBoard
@@ -725,6 +834,12 @@ export const App: React.FC = () => {
             onToggleTimer={handleToggleTimer}
             onFocusTask={(taskId) => setActiveTaskId(taskId)}
             onWipViolation={handleWipViolation}
+          />
+        ) : activeTab === 'projects' ? (
+          <ProjectManagementDashboard
+            projects={projects}
+            onUpdateProjects={setProjects}
+            onPromoteToKanban={handlePromoteScopeItemToTask}
           />
         ) : (
           <ExpenseDashboard

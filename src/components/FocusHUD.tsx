@@ -20,7 +20,8 @@ import {
   User as UserIcon,
   LogOut,
   Wallet,
-  CheckSquare
+  CheckSquare,
+  FolderGit2
 } from 'lucide-react';
 import { Task, AppSettings, TaskContext, ThemeMode, User, ActiveTab } from '../types';
 import { SyncStatus } from '../utils/sync';
@@ -145,7 +146,7 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             </div>
           </div>
 
-          {/* Module Switcher: Board vs Expenses */}
+          {/* Module Switcher: Board vs Expenses vs Projects */}
           <div className="flex items-center bg-offwhite-subtle dark:bg-zinc-900/90 border border-zinc-300/70 dark:border-zinc-800 p-0.5 rounded-xl text-xs font-medium shadow-sm">
             <button
               onClick={() => onSelectTab('tasks')}
@@ -158,6 +159,18 @@ export const FocusHUD: React.FC<FocusHUDProps> = ({
             >
               <CheckSquare className="w-3 h-3" />
               <span>Board</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('projects')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition text-[11px] ${
+                activeTab === 'projects'
+                  ? 'bg-brand-600 text-white font-semibold shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+              }`}
+              title="Project & Module Tracker (Alt+3)"
+            >
+              <FolderGit2 className="w-3 h-3" />
+              <span>Projects</span>
             </button>
             <button
               onClick={() => onSelectTab('expenses')}

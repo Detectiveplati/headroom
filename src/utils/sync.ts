@@ -1,4 +1,4 @@
-import { Task, AppSettings } from '../types';
+import { Task, AppSettings, Project } from '../types';
 import { getStoredAuthToken } from './auth';
 
 export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
@@ -10,6 +10,7 @@ export interface RemoteBoardData {
   tasks: Task[];
   settings?: AppSettings;
   activeTaskId?: string | null;
+  projects?: Project[];
   updatedAt: number;
 }
 
@@ -114,6 +115,7 @@ export async function pushBoardToCloud(
     tasks: Task[];
     settings: AppSettings;
     activeTaskId: string | null;
+    projects?: Project[];
     updatedAt: number;
     force?: boolean;
   }

@@ -6,7 +6,8 @@ import {
   ExpenseCategory, 
   CardMetaInfo,
   TrackedAccount,
-  MonthlyAccountUpload
+  MonthlyAccountUpload,
+  Project
 } from '../types';
 
 const STORAGE_KEY_TASKS = 'headroom_tasks_v1';
@@ -18,6 +19,7 @@ const STORAGE_KEY_RULES = 'headroom_category_rules_v1';
 const STORAGE_KEY_CARD_META = 'headroom_card_meta_v1';
 const STORAGE_KEY_ACCOUNTS = 'headroom_tracked_accounts_v1';
 const STORAGE_KEY_UPLOAD_LOGS = 'headroom_monthly_upload_logs_v1';
+const STORAGE_KEY_PROJECTS = 'headroom_projects_v1';
 const STORAGE_KEY_SCRUBBED = 'headroom_sample_scrubbed_v1';
 const STORAGE_KEY_FINANCE_MIGRATED = 'headroom_finance_storage_scoped_v1';
 
@@ -416,3 +418,213 @@ export function saveStoredUploadLogs(userId: string | undefined, logs: MonthlyAc
     console.error('Failed to save upload logs to localStorage', e);
   }
 }
+
+export const STARTER_PROJECTS: Project[] = [
+  {
+    id: 'proj-chillios',
+    name: 'chillios',
+    description: 'Core chillios application suite and modular client architecture',
+    color: '#6366f1',
+    createdAt: Date.now() - 86400000 * 7,
+    updatedAt: Date.now(),
+    modules: [
+      {
+        id: 'mod-retention',
+        projectId: 'proj-chillios',
+        name: 'Retention Sample Module',
+        summary: 'User cohort retention tracking, mathematical curve modeling, and sample analytics pipeline.',
+        status: 'in-progress',
+        version: 'v0.8.2',
+        techStack: ['Swift', 'TypeScript', 'Analytics Engine'],
+        updatedAt: Date.now() - 3600000 * 2,
+        notes: 'Targeting 90-day retention baseline. Needs QA on edge cases where sample size is under 10 cohorts.',
+        doneItems: [
+          {
+            id: 'scope-1',
+            title: 'Cohort retention calculation engine with day-N intervals',
+            completed: true,
+            createdAt: Date.now() - 86400000 * 3,
+            completedAt: Date.now() - 86400000 * 2,
+          },
+          {
+            id: 'scope-2',
+            title: 'Synthetic sample event generator for offline development & mocking',
+            completed: true,
+            createdAt: Date.now() - 86400000 * 3,
+            completedAt: Date.now() - 86400000 * 1,
+          },
+          {
+            id: 'scope-3',
+            title: 'Visual retention curve rendering layout with smooth gradients',
+            completed: true,
+            createdAt: Date.now() - 86400000 * 2,
+            completedAt: Date.now() - 86400000 * 1,
+          },
+        ],
+        missingItems: [
+          {
+            id: 'scope-4',
+            title: 'Cohort segment filtering dropdown UI (organic vs paid channels)',
+            completed: false,
+            createdAt: Date.now() - 86400000 * 1,
+          },
+          {
+            id: 'scope-5',
+            title: 'CSV raw retention cohort data export format',
+            completed: false,
+            createdAt: Date.now() - 86400000 * 1,
+          },
+          {
+            id: 'scope-6',
+            title: 'Unit tests for 90-day rolling boundary conditions',
+            completed: false,
+            createdAt: Date.now() - 3600000 * 4,
+          },
+          {
+            id: 'scope-7',
+            title: 'Graceful empty state banner when cohort sample size < 10 users',
+            completed: false,
+            createdAt: Date.now() - 3600000 * 2,
+          },
+        ],
+      },
+      {
+        id: 'mod-auth',
+        projectId: 'proj-chillios',
+        name: 'Authentication & Session Module',
+        summary: 'Biometric passkey onboarding flows with secure keychain persistence.',
+        status: 'shipped',
+        version: 'v1.0.0',
+        techStack: ['Passkeys', 'Keychain', 'Biometrics'],
+        updatedAt: Date.now() - 86400000 * 5,
+        doneItems: [
+          {
+            id: 'scope-auth-1',
+            title: 'FaceID / TouchID biometric prompt fallback',
+            completed: true,
+            createdAt: Date.now() - 86400000 * 8,
+            completedAt: Date.now() - 86400000 * 5,
+          },
+          {
+            id: 'scope-auth-2',
+            title: 'Encrypted token refresh in background tasks',
+            completed: true,
+            createdAt: Date.now() - 86400000 * 7,
+            completedAt: Date.now() - 86400000 * 5,
+          },
+        ],
+        missingItems: [
+          {
+            id: 'scope-auth-3',
+            title: 'Multi-device active session revocation panel',
+            completed: false,
+            createdAt: Date.now() - 86400000 * 4,
+          },
+        ],
+      },
+      {
+        id: 'mod-notifications',
+        projectId: 'proj-chillios',
+        name: 'Smart Notifications Engine',
+        summary: 'Local contextual nudges and re-engagement trigger alerts.',
+        status: 'planning',
+        version: 'v0.3.0',
+        techStack: ['APNs', 'LocalNotifications'],
+        updatedAt: Date.now() - 86400000 * 1,
+        doneItems: [
+          {
+            id: 'scope-notif-1',
+            title: 'Permission request prompt ergonomics with explainers',
+            completed: true,
+            createdAt: Date.now() - 86400000 * 2,
+            completedAt: Date.now() - 86400000 * 1,
+          },
+        ],
+        missingItems: [
+          {
+            id: 'scope-notif-2',
+            title: 'Dynamic interval calculation based on user drop-off days',
+            completed: false,
+            createdAt: Date.now() - 86400000 * 1,
+          },
+          {
+            id: 'scope-notif-3',
+            title: 'Deep-linking router handler on nudge notification tap',
+            completed: false,
+            createdAt: Date.now() - 3600000 * 6,
+          },
+        ],
+      },
+    ],
+  },
+];
+
+export function loadStoredProjects(): Project[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
+    if (!raw) {
+      return STARTER_PROJECTS;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return STARTER_PROJECTS;
+    }
+    // Defensively sanitize properties
+    return parsed.map((p) => ({
+      id: String(p?.id || `proj-${Date.now()}`),
+      name: String(p?.name || 'Untitled Project'),
+      description: String(p?.description || ''),
+      color: String(p?.color || '#6366f1'),
+      createdAt: Number(p?.createdAt) || Date.now(),
+      updatedAt: Number(p?.updatedAt) || Date.now(),
+      modules: Array.isArray(p?.modules)
+        ? p.modules.map((m: any) => ({
+            id: String(m?.id || `mod-${Date.now()}`),
+            projectId: String(m?.projectId || p?.id),
+            name: String(m?.name || 'Untitled Module'),
+            summary: String(m?.summary || ''),
+            status: ['planning', 'in-progress', 'review', 'shipped'].includes(m?.status)
+              ? m.status
+              : 'planning',
+            version: m?.version ? String(m.version) : undefined,
+            techStack: Array.isArray(m?.techStack) ? m.techStack.map(String) : [],
+            notes: m?.notes ? String(m.notes) : undefined,
+            updatedAt: Number(m?.updatedAt) || Date.now(),
+            doneItems: Array.isArray(m?.doneItems)
+              ? m.doneItems.map((item: any) => ({
+                  id: String(item?.id || `scope-${Date.now()}`),
+                  title: String(item?.title || ''),
+                  details: item?.details ? String(item.details) : undefined,
+                  completed: true,
+                  linkedTaskId: item?.linkedTaskId ? String(item.linkedTaskId) : undefined,
+                  createdAt: Number(item?.createdAt) || Date.now(),
+                  completedAt: Number(item?.completedAt) || Date.now(),
+                }))
+              : [],
+            missingItems: Array.isArray(m?.missingItems)
+              ? m.missingItems.map((item: any) => ({
+                  id: String(item?.id || `scope-${Date.now()}`),
+                  title: String(item?.title || ''),
+                  details: item?.details ? String(item.details) : undefined,
+                  completed: false,
+                  linkedTaskId: item?.linkedTaskId ? String(item.linkedTaskId) : undefined,
+                  createdAt: Number(item?.createdAt) || Date.now(),
+                }))
+              : [],
+          }))
+        : [],
+    }));
+  } catch (e) {
+    console.error('Failed to load projects from localStorage, falling back to starter projects', e);
+    return STARTER_PROJECTS;
+  }
+}
+
+export function saveStoredProjects(projects: Project[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
+  } catch (e) {
+    console.error('Failed to save projects to localStorage', e);
+  }
+}
+

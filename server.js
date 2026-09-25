@@ -218,7 +218,7 @@ const server = http.createServer(async (req, res) => {
         }
 
         const payload = await parseBody(req);
-        const { tasks, settings, activeTaskId, updatedAt = Date.now(), force = false } = payload;
+        const { tasks, settings, activeTaskId, projects, updatedAt = Date.now(), force = false } = payload;
 
         if (!force) {
           const existing = await getBoard(boardKey);
@@ -236,6 +236,7 @@ const server = http.createServer(async (req, res) => {
           tasks,
           settings,
           activeTaskId,
+          projects,
           updatedAt: Math.max(updatedAt, Date.now()),
         });
 

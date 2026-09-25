@@ -39,6 +39,9 @@ export interface Task {
   completedAt?: number;
   dueDate?: string;
   hasSpecificTime?: boolean;
+  linkedProjectId?: string;
+  linkedModuleId?: string;
+  linkedScopeItemId?: string;
 }
 
 export interface Column {
@@ -73,7 +76,43 @@ export interface User {
   createdAt?: number;
 }
 
-export type ActiveTab = 'tasks' | 'expenses';
+export type ActiveTab = 'tasks' | 'expenses' | 'projects';
+
+export type ModuleStatus = 'planning' | 'in-progress' | 'review' | 'shipped';
+
+export interface ModuleScopeItem {
+  id: string;
+  title: string;
+  details?: string;
+  completed: boolean;
+  linkedTaskId?: string;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export interface ProjectModule {
+  id: string;
+  projectId: string;
+  name: string;
+  summary: string;
+  status: ModuleStatus;
+  version?: string;
+  techStack?: string[];
+  doneItems: ModuleScopeItem[];
+  missingItems: ModuleScopeItem[];
+  notes?: string;
+  updatedAt: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  modules: ProjectModule[];
+  createdAt: number;
+  updatedAt: number;
+}
 
 export type TransactionType = 'expense' | 'refund' | 'transfer' | 'income';
 
