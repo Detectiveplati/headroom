@@ -106,3 +106,18 @@
 .glow-brand {
   box-shadow: 0 0 16px -2px rgba(94, 106, 210, 0.4);
 }
+
+/* Project map: connection handles appear on hover, or while drawing a line */
+.map-handle {
+  width: 8px;
+  height: 8px;
+  background: #5e6ad2;
+  border: 2px solid #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.react-flow__node:hover .map-handle,
+.react-flow.connecting .map-handle {
+  opacity: 1;
+}

@@ -10,7 +10,8 @@ export interface RemoteBoardData {
   tasks: Task[];
   settings?: AppSettings;
   activeTaskId?: string | null;
-  projects?: Project[];
+  // Untrusted server data: run through normalizeProjects() before use
+  projects?: unknown;
   updatedAt: number;
 }
 

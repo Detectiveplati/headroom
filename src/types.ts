@@ -39,9 +39,11 @@ export interface Task {
   completedAt?: number;
   dueDate?: string;
   hasSpecificTime?: boolean;
+  // Project map link: a task of a module is a card with these set
   linkedProjectId?: string;
   linkedModuleId?: string;
-  linkedScopeItemId?: string;
+  // false = lives only on the project map; undefined/true = shown on the kanban board
+  isOnBoard?: boolean;
 }
 
 export interface Column {
@@ -59,6 +61,8 @@ export interface BoardFilter {
   priority: Priority | 'all';
   tag: string | 'all';
   context: TaskContext | 'all';
+  // 'all', 'none' (cards without a project), or a project id
+  project: string;
 }
 
 export interface AppSettings {
@@ -78,30 +82,35 @@ export interface User {
 
 export type ActiveTab = 'tasks' | 'expenses' | 'projects';
 
-export type ModuleStatus = 'planning' | 'in-progress' | 'review' | 'shipped';
+export type MapNodeKind = 'module' | 'note' | 'frame';
 
-export interface ModuleScopeItem {
+export type MapLinkStyle = 'plain' | 'dashed' | 'blocks';
+
+// A box on a project's whiteboard. Tasks of a module are Task cards with linkedModuleId = node id.
+export interface MapNode {
   id: string;
+  kind: MapNodeKind;
   title: string;
-  details?: string;
-  completed: boolean;
-  linkedTaskId?: string;
-  createdAt: number;
-  completedAt?: number;
+  notes?: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  // Only used when a module has no tasks; otherwise done is computed from its cards
+  isDoneManual?: boolean;
+  // Stable key from an imported map file, so re-importing never duplicates
+  seedKey?: string;
 }
 
-export interface ProjectModule {
+export interface MapLink {
   id: string;
-  projectId: string;
-  name: string;
-  summary: string;
-  status: ModuleStatus;
-  version?: string;
-  techStack?: string[];
-  doneItems: ModuleScopeItem[];
-  missingItems: ModuleScopeItem[];
-  notes?: string;
-  updatedAt: number;
+  fromNodeId: string;
+  toNodeId: string;
+  // Which side of each box the line attaches to ('t' | 'r' | 'b' | 'l')
+  fromHandle?: string;
+  toHandle?: string;
+  label?: string;
+  style: MapLinkStyle;
 }
 
 export interface Project {
@@ -109,7 +118,8 @@ export interface Project {
   name: string;
   description: string;
   color: string;
-  modules: ProjectModule[];
+  nodes: MapNode[];
+  links: MapLink[];
   createdAt: number;
   updatedAt: number;
 }
