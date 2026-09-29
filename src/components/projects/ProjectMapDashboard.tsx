@@ -93,6 +93,28 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
     [onUpdateTasks]
   );
 
+  // Shared by the box on the canvas and the details panel
+  const addModuleTasks = useCallback(
+    (nodeId: string, titles: string[]) => {
+      if (!activeProject) return;
+      const projectId = activeProject.id;
+      const now = Date.now();
+      // Stagger createdAt so the checklist keeps the typed order
+      const created = titles.map((title, i) => ({ ...createMapTask(projectId, nodeId, title), createdAt: now + i }));
+      onUpdateTasks((prev) => [...prev, ...created]);
+    },
+    [activeProject, onUpdateTasks]
+  );
+
+  const toggleTaskDone = useCallback(
+    (task: Task) => {
+      const done = !isTaskDone(task);
+      updateTask(task.id, (t) => setTaskDone(t, done));
+      if (done) soundManager.playSubtaskCheck();
+    },
+    [updateTask]
+  );
+
   const selectedNode = activeProject?.nodes.find((n) => n.id === selectedNodeId && n.kind === 'module') || null;
   const selectedTasks = useMemo(
     () => (activeProject && selectedNode ? groupTasksByModule(tasks, activeProject.id).get(selectedNode.id) || [] : []),
@@ -302,6 +324,8 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
           onFocusHandled={() => setFocusNodeId(null)}
           onSelectModule={setSelectedNodeId}
           onUpdateProject={updateActiveProject}
+          onAddModuleTasks={addModuleTasks}
+          onToggleTaskDone={toggleTaskDone}
         />
       </div>
 
@@ -326,16 +350,8 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
               nodes: p.nodes.map((n) => (n.id === selectedNode.id ? { ...n, isDoneManual: !n.isDoneManual || undefined } : n)),
             }))
           }
-          onAddTasks={(titles) => {
-            const now = Date.now();
-            const created = titles.map((title, i) => ({ ...createMapTask(projectId, selectedNode.id, title), createdAt: now + i }));
-            onUpdateTasks((prev) => [...prev, ...created]);
-          }}
-          onToggleTaskDone={(task) => {
-            const done = !isTaskDone(task);
-            updateTask(task.id, (t) => setTaskDone(t, done));
-            if (done) soundManager.playSubtaskCheck();
-          }}
+          onAddTasks={(titles) => addModuleTasks(selectedNode.id, titles)}
+          onToggleTaskDone={toggleTaskDone}
           onRenameTask={(task, title) => updateTask(task.id, (t) => ({ ...t, title }))}
           onToggleTaskOnBoard={(task) => updateTask(task.id, (t) => setTaskOnBoard(t, t.isOnBoard === false))}
           onSendAllOpenToBoard={() =>

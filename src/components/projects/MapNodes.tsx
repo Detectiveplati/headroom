@@ -1,8 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Handle, Position, NodeProps, NodeResizer, NodeToolbar, Node, useStore } from '@xyflow/react';
-import { Check, X } from 'lucide-react';
-import { Task, MapColor } from '../../types';
-import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, ModuleProgress, mapColorHex } from '../../utils/projectMap';
+import {
+  Handle,
+  Position,
+  NodeProps,
+  NodeResizer,
+  NodeToolbar,
+  Node,
+  Edge,
+  EdgeProps,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+} from '@xyflow/react';
+import { Check, X, Plus, PanelRightOpen, Trash2 } from 'lucide-react';
+import { Task, MapColor, MapLinkStyle } from '../../types';
+import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, ModuleProgress, isTaskDone, mapColorHex } from '../../utils/projectMap';
+
+// Tasks listed inside a box; the rest are one click away in the details panel
+const MAX_BOX_TASKS = 6;
 
 interface ColorableData {
   colorKey?: MapColor;
@@ -14,7 +29,13 @@ export interface ModuleNodeData extends Record<string, unknown>, ColorableData {
   // Project colour, used when the box has no category colour
   color: string;
   progress: ModuleProgress;
-  openTasks: Task[];
+  tasks: Task[];
+  // Set on a freshly added box so its title opens ready to type
+  autoEdit: boolean;
+  onRename: (title: string) => void;
+  onOpenDetails: () => void;
+  onAddTask: (title: string) => void;
+  onToggleTask: (task: Task) => void;
   onToggleManualDone: () => void;
 }
 
@@ -61,14 +82,69 @@ const SideHandles: React.FC = () => (
   </>
 );
 
-const zoomSelector = (s: { transform: [number, number, number] }) => s.transform[2];
+// A new node stays hidden until React Flow has measured it, so autoFocus alone can miss;
+// retry for a few frames. Module-level so React calls it once per mount.
+function focusWhenShown(el: HTMLInputElement | null) {
+  if (!el) return;
+  let tries = 0;
+  const attempt = () => {
+    el.focus();
+    if (document.activeElement !== el && ++tries < 10) requestAnimationFrame(attempt);
+  };
+  attempt();
+}
+
+/** Inline "Add task" row at the bottom of a box; stays open after Enter for quick lists. */
+const BoxTaskInput: React.FC<{ onAdd: (title: string) => void }> = ({ onAdd }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+  const close = () => {
+    setDraft('');
+    setIsOpen(false);
+  };
+  const submit = () => {
+    if (draft.trim()) onAdd(draft.trim());
+    setDraft('');
+  };
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={() => setIsOpen(true)}
+        className="nodrag w-full flex items-center gap-1 text-[10px] text-zinc-400 hover:text-brand-600 dark:hover:text-brand-400 transition"
+      >
+        <Plus className="w-3 h-3" /> Add task
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        submit();
+        close();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') submit();
+        else if (e.key === 'Escape') close();
+      }}
+      placeholder="Task, then Enter"
+      className="nodrag w-full text-[10px] px-1.5 py-1 rounded bg-offwhite-input dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+    />
+  );
+};
 
 export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected }) => {
-  const zoom = useStore(zoomSelector);
+  const edit = useInlineEdit(data.title, data.onRename, data.autoEdit);
   const { done, total, isDone } = data.progress;
   const pct = total > 0 ? Math.round((done / total) * 100) : isDone ? 100 : 0;
-  const showTasks = zoom >= 1.1 && data.openTasks.length > 0;
   const category = mapColorHex(data.colorKey);
+  // Open tasks first so what is left to do stays visible
+  const ordered = [...data.tasks.filter((t) => !isTaskDone(t)), ...data.tasks.filter(isTaskDone)];
+  const shown = ordered.slice(0, MAX_BOX_TASKS);
+  const hidden = ordered.length - shown.length;
 
   return (
     <div
@@ -79,7 +155,7 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
         backgroundImage: category ? `linear-gradient(${category}1f, ${category}1f)` : undefined,
         borderColor: category && !selected ? `${category}80` : undefined,
       }}
-      className={`rounded-xl border border-t-4 bg-offwhite-card dark:bg-[#151821] shadow-sm transition-shadow ${
+      className={`group rounded-xl border border-t-4 bg-offwhite-card dark:bg-[#151821] shadow-sm transition-shadow ${
         selected ? 'border-brand-500 ring-2 ring-brand-500/40 shadow-md' : 'border-zinc-300/80 dark:border-zinc-700/80'
       } ${isDone ? 'opacity-80' : ''}`}
     >
@@ -99,9 +175,37 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
           >
             {isDone && <Check className="w-3 h-3" />}
           </button>
-          <span className={`text-xs font-semibold leading-snug text-zinc-900 dark:text-zinc-100 ${isDone ? 'line-through decoration-zinc-400' : ''}`}>
-            {data.title || 'Untitled module'}
-          </span>
+          {edit.isEditing ? (
+            <input
+              ref={focusWhenShown}
+              value={edit.draft}
+              onChange={(e) => edit.setDraft(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onBlur={edit.commit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') edit.commit();
+                else if (e.key === 'Escape') edit.cancel();
+              }}
+              className="nodrag flex-1 min-w-0 text-xs font-semibold bg-transparent text-zinc-900 dark:text-zinc-100 border-b border-brand-500 focus:outline-none"
+            />
+          ) : (
+            <span
+              onClick={edit.start}
+              title="Click to rename"
+              className={`flex-1 min-w-0 text-xs font-semibold leading-snug text-zinc-900 dark:text-zinc-100 cursor-text break-words ${
+                isDone ? 'line-through decoration-zinc-400' : ''
+              }`}
+            >
+              {data.title || 'Untitled module'}
+            </span>
+          )}
+          <button
+            onClick={data.onOpenDetails}
+            title="Open details (notes, board, delete)"
+            className="nodrag -mr-1 -mt-0.5 p-0.5 rounded text-zinc-400 opacity-60 group-hover:opacity-100 hover:text-brand-600 hover:bg-brand-500/10 dark:hover:text-brand-400 transition"
+          >
+            <PanelRightOpen className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         <div className="space-y-1">
@@ -113,26 +217,52 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
           </div>
         </div>
 
-        {showTasks && (
-          <ul className="space-y-0.5 border-t border-zinc-200 dark:border-zinc-800 pt-1.5">
-            {data.openTasks.slice(0, 4).map((t) => (
-              <li key={t.id} className="text-[10px] text-zinc-600 dark:text-zinc-400 truncate">
-                ○ {t.title}
-              </li>
-            ))}
-            {data.openTasks.length > 4 && (
-              <li className="text-[10px] text-zinc-400">+{data.openTasks.length - 4} more</li>
-            )}
-          </ul>
-        )}
+        <div className="space-y-1 border-t border-zinc-200 dark:border-zinc-800 pt-1.5">
+          {shown.length > 0 && (
+            <ul className="space-y-0.5">
+              {shown.map((t) => {
+                const taskDone = isTaskDone(t);
+                return (
+                  <li key={t.id} className="flex items-center gap-1.5 min-w-0">
+                    <button
+                      onClick={() => data.onToggleTask(t)}
+                      title={taskDone ? 'Mark not done' : 'Mark done'}
+                      className={`nodrag h-3 w-3 shrink-0 rounded-sm border flex items-center justify-center transition ${
+                        taskDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-zinc-400 dark:border-zinc-600 hover:border-emerald-500'
+                      }`}
+                    >
+                      {taskDone && <Check className="w-2 h-2" />}
+                    </button>
+                    <span
+                      title={t.title}
+                      className={`text-[10px] truncate ${
+                        taskDone ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-700 dark:text-zinc-300'
+                      }`}
+                    >
+                      {t.title}
+                    </span>
+                  </li>
+                );
+              })}
+              {hidden > 0 && (
+                <li>
+                  <button onClick={data.onOpenDetails} className="nodrag text-[10px] text-zinc-400 hover:text-brand-600 dark:hover:text-brand-400">
+                    +{hidden} more
+                  </button>
+                </li>
+              )}
+            </ul>
+          )}
+          <BoxTaskInput onAdd={data.onAddTask} />
+        </div>
       </div>
     </div>
   );
 };
 
-/** Double-click to edit; commits on blur or Enter (Shift+Enter for a new line). */
-function useInlineEdit(title: string, onRename: (title: string) => void) {
-  const [isEditing, setIsEditing] = useState(false);
+/** Inline title editing; commits on blur or Enter (Shift+Enter for a new line in notes). */
+function useInlineEdit(title: string, onRename: (title: string) => void, startEditing = false) {
+  const [isEditing, setIsEditing] = useState(startEditing);
   const [draft, setDraft] = useState(title);
   useEffect(() => {
     if (!isEditing) setDraft(title);
@@ -231,6 +361,72 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
           )}
         </div>
       </div>
+    </>
+  );
+};
+
+export interface LinkEdgeData extends Record<string, unknown> {
+  linkStyle: MapLinkStyle;
+  onDelete: () => void;
+}
+
+export type LinkFlowEdge = Edge<LinkEdgeData, 'link'>;
+
+/** A line between boxes: click to select it, then its bin button (or Delete) removes it. */
+export const LinkEdge: React.FC<EdgeProps<LinkFlowEdge>> = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style,
+  markerEnd,
+  label,
+  selected,
+  data,
+}) => {
+  const [path, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
+  const isBlocks = data?.linkStyle === 'blocks';
+  const baseWidth = Number(style?.strokeWidth) || 1.5;
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerEnd={markerEnd}
+        interactionWidth={24}
+        style={selected ? { ...style, strokeWidth: baseWidth + 1.5, filter: 'drop-shadow(0 0 3px rgba(94, 106, 210, 0.7))' } : style}
+      />
+      {(label || selected) && (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan absolute flex items-center gap-1"
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: 'all' }}
+          >
+            {label && (
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] bg-offwhite-surface/90 dark:bg-zinc-900/90 ${
+                  isBlocks ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'
+                }`}
+              >
+                {label}
+              </span>
+            )}
+            {selected && data && (
+              <button
+                onClick={data.onDelete}
+                title="Delete line (Delete)"
+                className="p-1 rounded-full bg-offwhite-surface dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-md text-zinc-500 hover:text-red-500 hover:border-red-400 transition"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </EdgeLabelRenderer>
+      )}
     </>
   );
 };

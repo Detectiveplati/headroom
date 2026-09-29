@@ -10,10 +10,12 @@ import {
   Edge,
   Node,
   NodeChange,
+  EdgeChange,
   Connection,
   ConnectionMode,
   MarkerType,
   applyNodeChanges,
+  applyEdgeChanges,
   useReactFlow,
   OnBeforeDelete,
   OnNodeDrag,
@@ -22,19 +24,23 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Plus, StickyNote, Frame, Magnet, Maximize2 } from 'lucide-react';
 import { Project, Task, MapNode, MapLink, MapNodeKind, MapColor } from '../../types';
-import { MAP_GRID, LINK_STYLES, groupTasksByModule, getModuleProgress, isTaskDone, makeId, mapColorHex } from '../../utils/projectMap';
-import { ModuleNode, NoteNode, FrameNode } from './MapNodes';
+import { MAP_GRID, LINK_STYLES, groupTasksByModule, getModuleProgress, makeId, mapColorHex } from '../../utils/projectMap';
+import { ModuleNode, NoteNode, FrameNode, LinkEdge, LinkFlowEdge } from './MapNodes';
 
 const NODE_TYPES = { module: ModuleNode, note: NoteNode, frame: FrameNode };
+const EDGE_TYPES = { link: LinkEdge };
 
 interface ProjectCanvasProps {
   project: Project;
   tasks: Task[];
+  // Module whose details panel is open
   selectedNodeId: string | null;
   focusNodeId: string | null;
   onFocusHandled: () => void;
   onSelectModule: (nodeId: string | null) => void;
   onUpdateProject: (update: (p: Project) => Project) => void;
+  onAddModuleTasks: (nodeId: string, titles: string[]) => void;
+  onToggleTaskDone: (task: Task) => void;
 }
 
 function useIsDarkMode(): boolean {
@@ -56,12 +62,13 @@ function facingHandles(from: MapNode | undefined, to: MapNode | undefined): [str
   return dy >= 0 ? ['b', 't'] : ['t', 'b'];
 }
 
-function edgeFromLink(link: MapLink, nodesById: Map<string, MapNode>): Edge {
+function edgeFromLink(link: MapLink, nodesById: Map<string, MapNode>, onDelete: () => void): LinkFlowEdge {
   const isBlocks = link.style === 'blocks';
   const stroke = isBlocks ? '#ef4444' : '#94a3b8';
   const [autoFrom, autoTo] = facingHandles(nodesById.get(link.fromNodeId), nodesById.get(link.toNodeId));
   return {
     id: link.id,
+    type: 'link',
     source: link.fromNodeId,
     target: link.toNodeId,
     sourceHandle: link.fromHandle || autoFrom,
@@ -69,8 +76,7 @@ function edgeFromLink(link: MapLink, nodesById: Map<string, MapNode>): Edge {
     label: link.label,
     style: { stroke, strokeWidth: isBlocks ? 2 : 1.5, strokeDasharray: link.style === 'dashed' ? '6 4' : undefined },
     markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
-    labelStyle: { fontSize: 10, fill: isBlocks ? '#ef4444' : '#64748b' },
-    labelBgStyle: { fillOpacity: 0.85 },
+    data: { linkStyle: link.style, onDelete },
   };
 }
 
@@ -88,12 +94,16 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
   onFocusHandled,
   onSelectModule,
   onUpdateProject,
+  onAddModuleTasks,
+  onToggleTaskDone,
 }) => {
   const flow = useReactFlow();
   const isDark = useIsDarkMode();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [snapOn, setSnapOn] = useState(true);
   const [altHeld, setAltHeld] = useState(false);
+  // The module just added from the toolbar opens with its title ready to type
+  const [autoEditNodeId, setAutoEditNodeId] = useState<string | null>(null);
   // Nodes that ride along while a frame is dragged: id -> position at drag start
   const frameDragRef = useRef<{ frameStart: { x: number; y: number }; children: Map<string, { x: number; y: number }> } | null>(null);
 
@@ -159,7 +169,12 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           title: n.title,
           color: project.color,
           progress: getModuleProgress(n, moduleTasks),
-          openTasks: moduleTasks.filter((t) => !isTaskDone(t)),
+          tasks: moduleTasks,
+          autoEdit: n.id === autoEditNodeId,
+          onRename: (title: string) => renameNode(n.id, title),
+          onOpenDetails: () => onSelectModule(n.id),
+          onAddTask: (title: string) => onAddModuleTasks(n.id, [title]),
+          onToggleTask: onToggleTaskDone,
           onToggleManualDone: () =>
             onUpdateProject((p) => ({
               ...p,
@@ -168,27 +183,62 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         },
       };
     });
-  }, [project, tasks, selectedNodeId, renameNode, setNodeColor, onUpdateProject]);
+  }, [
+    project,
+    tasks,
+    selectedNodeId,
+    autoEditNodeId,
+    renameNode,
+    setNodeColor,
+    onUpdateProject,
+    onSelectModule,
+    onAddModuleTasks,
+    onToggleTaskDone,
+  ]);
 
+  // Rebuilds keep the canvas selection (e.g. after picking a colour or ticking a task) so
+  // toolbars stay open, and keep the measured size so React Flow doesn't hide the box to
+  // re-measure it. The module with its panel open is always selected.
   const [nodes, setNodes] = useState<Node[]>(derivedNodes);
-  // Modules follow selectedNodeId; notes and frames keep their canvas selection across rebuilds
-  // (e.g. after picking a colour) so their toolbar stays open.
   useEffect(
     () =>
       setNodes((prev) => {
-        const wasSelected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
-        return derivedNodes.map((n) => (n.type !== 'module' && wasSelected.has(n.id) ? { ...n, selected: true } : n));
+        const prevById = new Map(prev.map((n) => [n.id, n]));
+        return derivedNodes.map((n) => {
+          const old = prevById.get(n.id);
+          return old ? { ...n, measured: old.measured, selected: n.selected || old.selected } : n;
+        });
       }),
     [derivedNodes]
   );
 
-  const edges = useMemo(() => {
+  const deleteLink = useCallback(
+    (linkId: string) => onUpdateProject((p) => ({ ...p, links: p.links.filter((l) => l.id !== linkId) })),
+    [onUpdateProject]
+  );
+
+  const derivedEdges = useMemo(() => {
     const nodesById = new Map(project.nodes.map((n) => [n.id, n]));
-    return project.links.map((l) => edgeFromLink(l, nodesById));
-  }, [project.links, project.nodes]);
+    return project.links.map((l) => edgeFromLink(l, nodesById, () => deleteLink(l.id)));
+  }, [project.links, project.nodes, deleteLink]);
+
+  // Lines are selectable like nodes: click one to show its delete button
+  const [edges, setEdges] = useState<Edge[]>(derivedEdges);
+  useEffect(
+    () =>
+      setEdges((prev) => {
+        const wasSelected = new Set(prev.filter((e) => e.selected).map((e) => e.id));
+        return derivedEdges.map((e) => (wasSelected.has(e.id) ? { ...e, selected: true } : e));
+      }),
+    [derivedEdges]
+  );
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((prev) => applyNodeChanges(changes, prev));
+  }, []);
+
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((prev) => applyEdgeChanges(changes, prev));
   }, []);
 
   const onNodeDragStart: OnNodeDrag = useCallback(
@@ -323,7 +373,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
       ...(kind === 'frame' ? { width: MAP_GRID * 16, height: MAP_GRID * 10 } : {}),
     };
     onUpdateProject((p) => ({ ...p, nodes: [...p.nodes, node] }));
-    if (kind === 'module') onSelectModule(node.id);
+    if (kind === 'module') setAutoEditNodeId(node.id);
   };
 
   // Centre on a module when arriving from a board card's "Open in map"
@@ -348,11 +398,12 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
-        onNodeClick={(_, node) => onSelectModule(node.type === 'module' ? node.id : null)}
         onPaneClick={() => onSelectModule(null)}
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
@@ -409,7 +460,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           </button>
         </Panel>
         <Panel position="bottom-right" className="!mb-2 hidden md:block text-[10px] text-zinc-400 dark:text-zinc-500 bg-offwhite-surface/80 dark:bg-zinc-900/80 px-2 py-1 rounded-md">
-          Drag from a box’s edge dot onto another box to link them · double-click a line to label it · right-click to cycle plain / dashed / blocks · select + Delete to remove
+          Click a title to rename · drag from a box’s edge dot onto another box to link them · click a line to delete it · double-click to label · right-click to cycle plain / dashed / blocks
         </Panel>
       </ReactFlow>
     </div>
