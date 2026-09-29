@@ -43,9 +43,9 @@ function applyTaskSnapshot(current: Task[], snapshot: MapSnapshot): Task[] {
 }
 
 // Undo never moves a card into Doing, so it can't get around the WIP limit; it lands in Today
-function restoredColumn(current: Task, saved: Task): Pick<Task, 'columnId' | 'completedAt'> {
-  if (saved.columnId === 'doing' && current.columnId !== 'doing') return { columnId: 'today', completedAt: undefined };
-  return { columnId: saved.columnId, completedAt: saved.completedAt };
+function restoredColumn(current: Task, saved: Task): Pick<Task, 'columnId' | 'completedAt' | 'columnBeforeDone'> {
+  if (saved.columnId === 'doing' && current.columnId !== 'doing') return { columnId: 'today', completedAt: undefined, columnBeforeDone: undefined };
+  return { columnId: saved.columnId, completedAt: saved.completedAt, columnBeforeDone: saved.columnBeforeDone };
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {

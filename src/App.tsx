@@ -495,6 +495,7 @@ export const App: React.FC = () => {
           ? {
               ...t,
               columnId: 'done' as ColumnId,
+              columnBeforeDone: t.columnId === 'done' ? t.columnBeforeDone : t.columnId,
               isRunning: false,
               completedAt: Date.now(),
               subtasks: t.subtasks.map((st) => ({ ...st, completed: true })),
@@ -526,6 +527,7 @@ export const App: React.FC = () => {
           columnId: targetCol,
           isRunning: isMovingToDoing ? (settings.autoStartTimerOnDoing ? true : t.isRunning) : false,
           completedAt: isMovingToDone ? Date.now() : undefined,
+          columnBeforeDone: isMovingToDone ? (t.columnId === 'done' ? t.columnBeforeDone : t.columnId) : undefined,
         };
       })
     );
@@ -626,7 +628,13 @@ export const App: React.FC = () => {
       setTasks((prev) =>
         prev.map((t) => {
           if (t.id !== editingTask.id) return t;
-          const next = { ...t, ...taskData };
+          let next: Task = { ...t, ...taskData };
+          if (next.columnId !== t.columnId) {
+            next =
+              next.columnId === 'done'
+                ? { ...next, completedAt: Date.now(), isRunning: false, columnBeforeDone: t.columnId }
+                : { ...next, completedAt: undefined, columnBeforeDone: undefined };
+          }
           // A map-only card moved into Doing must be visible on the board (WIP guardrail)
           return next.columnId === 'doing' ? { ...next, isOnBoard: true } : next;
         })

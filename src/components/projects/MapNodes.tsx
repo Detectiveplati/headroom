@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Handle,
   Position,
@@ -12,9 +12,9 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
 } from '@xyflow/react';
-import { Check, X, Plus, PanelRightOpen, Trash2, Lock, Unlock } from 'lucide-react';
+import { Check, X, Plus, PanelRightOpen, Trash2, Lock, Unlock, Zap, LayoutGrid, StickyNote } from 'lucide-react';
 import { Task, MapColor, MapLinkStyle } from '../../types';
-import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, ModuleProgress, isTaskDone, mapColorHex } from '../../utils/projectMap';
+import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, LINK_STYLES, ModuleProgress, isTaskDone, mapColorHex } from '../../utils/projectMap';
 
 interface BoxToolbarData {
   colorKey?: MapColor;
@@ -29,12 +29,14 @@ export interface ModuleNodeData extends Record<string, unknown>, BoxToolbarData 
   color: string;
   progress: ModuleProgress;
   tasks: Task[];
+  notes?: string;
   // Set on a freshly added box so its title opens ready to type
   autoEdit: boolean;
   onRename: (title: string) => void;
   onOpenDetails: () => void;
   onAddTask: (title: string) => void;
   onToggleTask: (task: Task) => void;
+  onSendTaskToBoard: (task: Task) => void;
   onToggleManualDone: () => void;
 }
 
@@ -162,6 +164,8 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
   const category = mapColorHex(data.colorKey);
   // Every task, in full; open ones first so what is left to do leads
   const ordered = [...data.tasks.filter((t) => !isTaskDone(t)), ...data.tasks.filter(isTaskDone)];
+  const hasDoingTask = data.tasks.some((t) => t.columnId === 'doing');
+  const notesPreview = data.notes?.split('\n').find((line) => line.trim())?.trim();
 
   return (
     <div
@@ -216,6 +220,9 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
               {data.title || 'Untitled module'}
             </span>
           )}
+          {hasDoingTask && (
+            <span title="A task from this module is in Doing" className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500 animate-pulse" />
+          )}
           {data.isLocked && <LockBadge className="mt-0.5" />}
           <button
             onClick={data.onOpenDetails}
@@ -235,13 +242,25 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
           </div>
         </div>
 
+        {notesPreview && (
+          <button
+            onClick={data.onOpenDetails}
+            title="Open notes"
+            className="nodrag w-full flex items-center gap-1 text-left text-[10px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition"
+          >
+            <StickyNote className="w-3 h-3 shrink-0 text-amber-500" />
+            <span className="truncate">{notesPreview}</span>
+          </button>
+        )}
+
         <div className="space-y-1 border-t border-zinc-200 dark:border-zinc-800 pt-1.5">
           {ordered.length > 0 && (
             <ul className="space-y-1">
               {ordered.map((t) => {
                 const taskDone = isTaskDone(t);
+                const onBoard = t.isOnBoard !== false;
                 return (
-                  <li key={t.id} className="flex items-start gap-1.5 min-w-0">
+                  <li key={t.id} className="group/row flex items-start gap-1.5 min-w-0">
                     <button
                       onClick={() => data.onToggleTask(t)}
                       title={taskDone ? 'Mark not done' : 'Mark done'}
@@ -258,6 +277,32 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
                     >
                       {t.title}
                     </span>
+                    {!taskDone && t.columnId === 'doing' && (
+                      <span
+                        title="In Doing on the board"
+                        className="shrink-0 flex items-center gap-0.5 px-1 rounded-full text-[9px] font-medium bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                      >
+                        <Zap className="w-2.5 h-2.5" /> Doing
+                      </span>
+                    )}
+                    {!taskDone && t.columnId !== 'doing' && onBoard && (
+                      <span
+                        title={t.columnId === 'today' ? 'On the board in Today' : 'On the board in Backlog'}
+                        className="shrink-0 px-1 rounded-full text-[9px] font-medium bg-zinc-500/10 text-zinc-500 dark:text-zinc-400"
+                      >
+                        {t.columnId === 'today' ? 'Today' : 'Board'}
+                      </span>
+                    )}
+                    {!taskDone && !onBoard && (
+                      <button
+                        onClick={() => data.onSendTaskToBoard(t)}
+                        title="Send to board (lands in Backlog)"
+                        aria-label="Send to board (lands in Backlog)"
+                        className="nodrag shrink-0 p-0.5 rounded text-zinc-400 opacity-60 sm:opacity-0 group-hover/row:opacity-100 hover:text-brand-600 hover:bg-brand-500/10 dark:hover:text-brand-400 transition"
+                      >
+                        <LayoutGrid className="w-3 h-3" />
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -379,12 +424,53 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
 
 export interface LinkEdgeData extends Record<string, unknown> {
   linkStyle: MapLinkStyle;
+  onSetStyle: (style: MapLinkStyle) => void;
+  onSetLabel: (label: string) => void;
   onDelete: () => void;
 }
 
 export type LinkFlowEdge = Edge<LinkEdgeData, 'link'>;
 
-/** A line between boxes: click to select it, then its bin button (or Delete) removes it. */
+const LINK_STYLE_LABELS: Record<MapLinkStyle, string> = { plain: 'Plain', dashed: 'Dashed', blocks: 'Blocks' };
+
+/** Label field on a selected line; commits on blur or Enter, Escape reverts. */
+const LinkLabelInput: React.FC<{ label: string; onCommit: (label: string) => void }> = ({ label, onCommit }) => {
+  const [draft, setDraft] = useState(label);
+  const [isFocused, setIsFocused] = useState(false);
+  // Set by Escape so the blur that follows it doesn't commit the abandoned draft
+  const isCancelling = useRef(false);
+  useEffect(() => {
+    if (!isFocused) setDraft(label);
+  }, [label, isFocused]);
+
+  return (
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => {
+        setIsFocused(false);
+        if (isCancelling.current) isCancelling.current = false;
+        else if (draft.trim() !== label) onCommit(draft);
+      }}
+      onKeyDown={(e) => {
+        // Keep Backspace / Delete in the field from deleting the selected line
+        e.stopPropagation();
+        if (e.key === 'Enter') e.currentTarget.blur();
+        else if (e.key === 'Escape') {
+          isCancelling.current = true;
+          setDraft(label);
+          e.currentTarget.blur();
+        }
+      }}
+      placeholder="Label"
+      aria-label="Line label"
+      className="nodrag nopan nowheel w-24 text-[10px] px-1.5 py-0.5 rounded bg-offwhite-input dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+    />
+  );
+};
+
+/** A line between boxes: click to select it, then style it, label it or remove it (bin or Delete). */
 export const LinkEdge: React.FC<EdgeProps<LinkFlowEdge>> = ({
   id,
   sourceX,
@@ -418,7 +504,7 @@ export const LinkEdge: React.FC<EdgeProps<LinkFlowEdge>> = ({
             className="nodrag nopan absolute flex items-center gap-1"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: 'all' }}
           >
-            {label && (
+            {label && !selected && (
               <span
                 className={`px-1.5 py-0.5 rounded text-[10px] bg-offwhite-surface/90 dark:bg-zinc-900/90 ${
                   isBlocks ? 'text-red-500' : 'text-zinc-500 dark:text-zinc-400'
@@ -428,13 +514,37 @@ export const LinkEdge: React.FC<EdgeProps<LinkFlowEdge>> = ({
               </span>
             )}
             {selected && data && (
-              <button
-                onClick={data.onDelete}
-                title="Delete line (Delete)"
-                className="p-1 rounded-full bg-offwhite-surface dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-md text-zinc-500 hover:text-red-500 hover:border-red-400 transition"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1 px-1.5 py-1 rounded-full bg-offwhite-surface dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-md">
+                {LINK_STYLES.map((style) => {
+                  const isActive = data.linkStyle === style;
+                  return (
+                    <button
+                      key={style}
+                      onClick={() => data.onSetStyle(style)}
+                      aria-pressed={isActive}
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium transition ${
+                        isActive
+                          ? style === 'blocks'
+                            ? 'bg-red-500/15 text-red-500'
+                            : 'bg-brand-500/15 text-brand-700 dark:text-brand-300'
+                          : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      {LINK_STYLE_LABELS[style]}
+                    </button>
+                  );
+                })}
+                <span className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+                <LinkLabelInput label={typeof label === 'string' ? label : ''} onCommit={data.onSetLabel} />
+                <button
+                  onClick={data.onDelete}
+                  title="Delete line (Delete)"
+                  aria-label="Delete line"
+                  className="p-1 rounded-full text-zinc-500 hover:text-red-500 transition"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             )}
           </div>
         </EdgeLabelRenderer>

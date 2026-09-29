@@ -84,12 +84,20 @@ export function createMapTask(projectId: string, nodeId: string, title: string, 
   };
 }
 
-/** Ticking on the map and completing on the board are the same write: the Done column. */
+/**
+ * Ticking on the map and completing on the board are the same write: the Done column.
+ * Un-ticking restores the column the card came from, but never Doing (WIP limit): a card
+ * that was in Doing returns to Today.
+ */
 export function setTaskDone(task: Task, done: boolean): Task {
   if (done) {
-    return { ...task, columnId: 'done', isRunning: false, completedAt: Date.now() };
+    const columnBeforeDone = task.columnId === 'done' ? task.columnBeforeDone : task.columnId;
+    return { ...task, columnBeforeDone, columnId: 'done', isRunning: false, completedAt: Date.now() };
   }
-  return { ...task, columnId: 'backlog', completedAt: undefined };
+  const before = task.columnBeforeDone;
+  const restored = before === 'today' || before === 'doing' ? 'today' : 'backlog';
+  const columnId = task.isOnBoard === false ? 'backlog' : restored;
+  return { ...task, columnId, completedAt: undefined, columnBeforeDone: undefined };
 }
 
 /** Taking a card off the board parks it in the backlog so it never hides in Doing (WIP limit). */

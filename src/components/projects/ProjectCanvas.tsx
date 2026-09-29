@@ -24,8 +24,8 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Plus, StickyNote, Frame, Magnet, Maximize2, Undo2, Redo2 } from 'lucide-react';
 import { Project, Task, MapNode, MapLink, MapNodeKind, MapColor } from '../../types';
-import { MAP_GRID, MODULE_WIDTH, LINK_STYLES, groupTasksByModule, getModuleProgress, isInsideFrame, makeId, mapColorHex } from '../../utils/projectMap';
-import { ModuleNode, NoteNode, FrameNode, LinkEdge, LinkFlowEdge } from './MapNodes';
+import { MAP_GRID, MODULE_WIDTH, groupTasksByModule, getModuleProgress, isInsideFrame, makeId, mapColorHex } from '../../utils/projectMap';
+import { ModuleNode, NoteNode, FrameNode, LinkEdge, LinkEdgeData, LinkFlowEdge } from './MapNodes';
 
 const NODE_TYPES = { module: ModuleNode, note: NoteNode, frame: FrameNode };
 const EDGE_TYPES = { link: LinkEdge };
@@ -41,6 +41,7 @@ interface ProjectCanvasProps {
   onUpdateProject: (update: (p: Project) => Project) => void;
   onAddModuleTasks: (nodeId: string, titles: string[]) => void;
   onToggleTaskDone: (task: Task) => void;
+  onSendTaskToBoard: (task: Task) => void;
   // Unset when there is nothing to undo / redo
   onUndo?: () => void;
   onRedo?: () => void;
@@ -87,7 +88,11 @@ function facingHandles(from: Box | undefined, to: Box | undefined): [string, str
   return dy >= 0 ? ['b', 't'] : ['t', 'b'];
 }
 
-function edgeFromLink(link: MapLink, boxes: Map<string, Box>, onDelete: () => void): LinkFlowEdge {
+function edgeFromLink(
+  link: MapLink,
+  boxes: Map<string, Box>,
+  handlers: Pick<LinkEdgeData, 'onSetStyle' | 'onSetLabel' | 'onDelete'>
+): LinkFlowEdge {
   const isBlocks = link.style === 'blocks';
   const stroke = isBlocks ? '#ef4444' : '#94a3b8';
   const [sourceHandle, targetHandle] = facingHandles(boxes.get(link.fromNodeId), boxes.get(link.toNodeId));
@@ -101,7 +106,7 @@ function edgeFromLink(link: MapLink, boxes: Map<string, Box>, onDelete: () => vo
     label: link.label,
     style: { stroke, strokeWidth: isBlocks ? 2 : 1.5, strokeDasharray: link.style === 'dashed' ? '6 4' : undefined },
     markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
-    data: { linkStyle: link.style, onDelete },
+    data: { linkStyle: link.style, ...handlers },
   };
 }
 
@@ -115,6 +120,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
   onUpdateProject,
   onAddModuleTasks,
   onToggleTaskDone,
+  onSendTaskToBoard,
   onUndo,
   onRedo,
 }) => {
@@ -209,11 +215,13 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           color: project.color,
           progress: getModuleProgress(n, moduleTasks),
           tasks: moduleTasks,
+          notes: n.notes,
           autoEdit: n.id === autoEditNodeId,
           onRename: (title: string) => renameNode(n.id, title),
           onOpenDetails: () => onSelectModule(n.id),
           onAddTask: (title: string) => onAddModuleTasks(n.id, [title]),
           onToggleTask: onToggleTaskDone,
+          onSendTaskToBoard,
           onToggleManualDone: () =>
             onUpdateProject((p) => ({
               ...p,
@@ -234,6 +242,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     onSelectModule,
     onAddModuleTasks,
     onToggleTaskDone,
+    onSendTaskToBoard,
   ]);
 
   // Rebuilds keep the canvas selection (e.g. after picking a colour or ticking a task) so
@@ -254,6 +263,12 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
 
   const deleteLink = useCallback(
     (linkId: string) => onUpdateProject((p) => ({ ...p, links: p.links.filter((l) => l.id !== linkId) })),
+    [onUpdateProject]
+  );
+
+  const updateLink = useCallback(
+    (linkId: string, update: (l: MapLink) => MapLink) =>
+      onUpdateProject((p) => ({ ...p, links: p.links.map((l) => (l.id === linkId ? update(l) : l)) })),
     [onUpdateProject]
   );
 
@@ -286,10 +301,16 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         ];
       })
     );
-    return project.links.map((l) => edgeFromLink(l, boxes, () => deleteLink(l.id)));
-  }, [project.links, project.nodes, sizeKey, deleteLink]);
+    return project.links.map((l) =>
+      edgeFromLink(l, boxes, {
+        onSetStyle: (style) => updateLink(l.id, (x) => ({ ...x, style })),
+        onSetLabel: (label) => updateLink(l.id, (x) => ({ ...x, label: label.trim() || undefined })),
+        onDelete: () => deleteLink(l.id),
+      })
+    );
+  }, [project.links, project.nodes, sizeKey, deleteLink, updateLink]);
 
-  // Lines are selectable like nodes: click one to show its delete button
+  // Lines are selectable like nodes: click one to show its style, label and delete controls
   const [edges, setEdges] = useState<Edge[]>(derivedEdges);
   useEffect(
     () =>
@@ -418,12 +439,6 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     [onUpdateProject]
   );
 
-  const updateLink = useCallback(
-    (linkId: string, update: (l: MapLink) => MapLink) =>
-      onUpdateProject((p) => ({ ...p, links: p.links.map((l) => (l.id === linkId ? update(l) : l)) })),
-    [onUpdateProject]
-  );
-
   const addNode = (kind: MapNodeKind) => {
     const rect = wrapperRef.current?.getBoundingClientRect();
     const center = flow.screenToFlowPosition({
@@ -477,16 +492,6 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         connectionRadius={36}
         onBeforeDelete={onBeforeDelete}
         onDelete={onDelete}
-        onEdgeDoubleClick={(_, edge) => {
-          const link = project.links.find((l) => l.id === edge.id);
-          if (!link) return;
-          const label = window.prompt('Line label (leave empty for none)', link.label || '');
-          if (label !== null) updateLink(link.id, (l) => ({ ...l, label: label.trim() || undefined }));
-        }}
-        onEdgeContextMenu={(e, edge) => {
-          e.preventDefault();
-          updateLink(edge.id, (l) => ({ ...l, style: LINK_STYLES[(LINK_STYLES.indexOf(l.style) + 1) % LINK_STYLES.length] }));
-        }}
         connectionMode={ConnectionMode.Loose}
         snapToGrid={snapOn && !altHeld}
         snapGrid={[MAP_GRID, MAP_GRID]}
@@ -533,7 +538,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           </button>
         </Panel>
         <Panel position="bottom-right" className="!mb-2 hidden md:block text-[10px] text-zinc-400 dark:text-zinc-500 bg-offwhite-surface/80 dark:bg-zinc-900/80 px-2 py-1 rounded-md">
-          Click a title to rename · drag from a box’s edge dot onto another box to link them · click a line to delete it · double-click to label · right-click to cycle plain / dashed / blocks
+          Click a title to rename · drag from a box’s edge dot onto another box to link them · click a line to style, label or delete it
         </Panel>
       </ReactFlow>
     </div>

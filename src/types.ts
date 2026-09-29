@@ -37,6 +37,8 @@ export interface Task {
   isRunning?: boolean;
   createdAt: number;
   completedAt?: number;
+  // Column a card was in when it was completed, so un-ticking puts it back
+  columnBeforeDone?: ColumnId;
   dueDate?: string;
   hasSpecificTime?: boolean;
   // Project map link: a task of a module is a card with these set

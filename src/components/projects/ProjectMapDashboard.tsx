@@ -131,6 +131,12 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
     [updateTask]
   );
 
+  // Lands in Backlog (setTaskOnBoard keeps the column), so the WIP limit is unaffected
+  const sendTaskToBoard = useCallback(
+    (task: Task) => updateTask(task.id, (t) => setTaskOnBoard(t, true)),
+    [updateTask]
+  );
+
   const selectedNode = activeProject?.nodes.find((n) => n.id === selectedNodeId && n.kind === 'module') || null;
   const selectedTasks = useMemo(
     () => (activeProject && selectedNode ? groupTasksByModule(tasks, activeProject.id).get(selectedNode.id) || [] : []),
@@ -360,6 +366,7 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
           onUpdateProject={updateActiveProject}
           onAddModuleTasks={addModuleTasks}
           onToggleTaskDone={toggleTaskDone}
+          onSendTaskToBoard={sendTaskToBoard}
           onUndo={history.canUndo ? history.undo : undefined}
           onRedo={history.canRedo ? history.redo : undefined}
         />
