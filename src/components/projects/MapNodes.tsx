@@ -16,9 +16,6 @@ import { Check, X, Plus, PanelRightOpen, Trash2 } from 'lucide-react';
 import { Task, MapColor, MapLinkStyle } from '../../types';
 import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, ModuleProgress, isTaskDone, mapColorHex } from '../../utils/projectMap';
 
-// Tasks listed inside a box; the rest are one click away in the details panel
-const MAX_BOX_TASKS = 6;
-
 interface ColorableData {
   colorKey?: MapColor;
   onSetColor: (color: MapColor | undefined) => void;
@@ -141,10 +138,8 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
   const { done, total, isDone } = data.progress;
   const pct = total > 0 ? Math.round((done / total) * 100) : isDone ? 100 : 0;
   const category = mapColorHex(data.colorKey);
-  // Open tasks first so what is left to do stays visible
+  // Every task, in full; open ones first so what is left to do leads
   const ordered = [...data.tasks.filter((t) => !isTaskDone(t)), ...data.tasks.filter(isTaskDone)];
-  const shown = ordered.slice(0, MAX_BOX_TASKS);
-  const hidden = ordered.length - shown.length;
 
   return (
     <div
@@ -218,24 +213,23 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
         </div>
 
         <div className="space-y-1 border-t border-zinc-200 dark:border-zinc-800 pt-1.5">
-          {shown.length > 0 && (
-            <ul className="space-y-0.5">
-              {shown.map((t) => {
+          {ordered.length > 0 && (
+            <ul className="space-y-1">
+              {ordered.map((t) => {
                 const taskDone = isTaskDone(t);
                 return (
-                  <li key={t.id} className="flex items-center gap-1.5 min-w-0">
+                  <li key={t.id} className="flex items-start gap-1.5 min-w-0">
                     <button
                       onClick={() => data.onToggleTask(t)}
                       title={taskDone ? 'Mark not done' : 'Mark done'}
-                      className={`nodrag h-3 w-3 shrink-0 rounded-sm border flex items-center justify-center transition ${
+                      className={`nodrag mt-px h-3 w-3 shrink-0 rounded-sm border flex items-center justify-center transition ${
                         taskDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-zinc-400 dark:border-zinc-600 hover:border-emerald-500'
                       }`}
                     >
                       {taskDone && <Check className="w-2 h-2" />}
                     </button>
                     <span
-                      title={t.title}
-                      className={`text-[10px] truncate ${
+                      className={`flex-1 min-w-0 text-[10px] leading-snug break-words ${
                         taskDone ? 'line-through text-zinc-400 dark:text-zinc-500' : 'text-zinc-700 dark:text-zinc-300'
                       }`}
                     >
@@ -244,13 +238,6 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
                   </li>
                 );
               })}
-              {hidden > 0 && (
-                <li>
-                  <button onClick={data.onOpenDetails} className="nodrag text-[10px] text-zinc-400 hover:text-brand-600 dark:hover:text-brand-400">
-                    +{hidden} more
-                  </button>
-                </li>
-              )}
             </ul>
           )}
           <BoxTaskInput onAdd={data.onAddTask} />

@@ -22,7 +22,7 @@ import {
   OnConnectEnd,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Plus, StickyNote, Frame, Magnet, Maximize2 } from 'lucide-react';
+import { Plus, StickyNote, Frame, Magnet, Maximize2, Undo2, Redo2 } from 'lucide-react';
 import { Project, Task, MapNode, MapLink, MapNodeKind, MapColor } from '../../types';
 import { MAP_GRID, MODULE_WIDTH, LINK_STYLES, groupTasksByModule, getModuleProgress, isInsideFrame, makeId, mapColorHex } from '../../utils/projectMap';
 import { ModuleNode, NoteNode, FrameNode, LinkEdge, LinkFlowEdge } from './MapNodes';
@@ -41,6 +41,9 @@ interface ProjectCanvasProps {
   onUpdateProject: (update: (p: Project) => Project) => void;
   onAddModuleTasks: (nodeId: string, titles: string[]) => void;
   onToggleTaskDone: (task: Task) => void;
+  // Unset when there is nothing to undo / redo
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 function useIsDarkMode(): boolean {
@@ -112,6 +115,8 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
   onUpdateProject,
   onAddModuleTasks,
   onToggleTaskDone,
+  onUndo,
+  onRedo,
 }) => {
   const flow = useReactFlow();
   const isDark = useIsDarkMode();
@@ -500,6 +505,12 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           </button>
           <button onClick={() => flow.fitView({ padding: 0.15, duration: 300 })} className={`${toolButton} ${idleTool}`} title="Fit everything in view">
             <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onUndo} disabled={!onUndo} className={`${toolButton} ${idleTool} disabled:opacity-40 disabled:pointer-events-none`} title="Undo (Ctrl+Z)">
+            <Undo2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onRedo} disabled={!onRedo} className={`${toolButton} ${idleTool} disabled:opacity-40 disabled:pointer-events-none`} title="Redo (Ctrl+Shift+Z)">
+            <Redo2 className="w-3.5 h-3.5" />
           </button>
         </Panel>
         <Panel position="bottom-right" className="!mb-2 hidden md:block text-[10px] text-zinc-400 dark:text-zinc-500 bg-offwhite-surface/80 dark:bg-zinc-900/80 px-2 py-1 rounded-md">

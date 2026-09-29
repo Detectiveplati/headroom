@@ -17,6 +17,7 @@ import { downloadFile } from '../../utils/storage';
 import { soundManager } from '../../utils/audio';
 import { ProjectCanvas } from './ProjectCanvas';
 import { ModulePanel } from './ModulePanel';
+import { useMapHistory } from './useMapHistory';
 
 export interface MapFocus {
   projectId: string;
@@ -81,18 +82,31 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
 
   const progress = useMemo(() => (activeProject ? getProjectProgress(activeProject, tasks) : null), [activeProject, tasks]);
 
+  const history = useMapHistory(activeProject, tasks, onUpdateProjects, onUpdateTasks);
+  const { record } = history;
+
+  // Every map edit goes through these three, so each is one undo step
   const updateActiveProject = useCallback(
     (update: (p: Project) => Project) => {
       if (!activeProject) return;
       const id = activeProject.id;
+      record();
       onUpdateProjects((prev) => prev.map((p) => (p.id === id ? { ...update(p), updatedAt: Date.now() } : p)));
     },
-    [activeProject, onUpdateProjects]
+    [activeProject, onUpdateProjects, record]
+  );
+
+  const changeTasks = useCallback(
+    (update: (prev: Task[]) => Task[]) => {
+      record();
+      onUpdateTasks(update);
+    },
+    [onUpdateTasks, record]
   );
 
   const updateTask = useCallback(
-    (taskId: string, update: (t: Task) => Task) => onUpdateTasks((prev) => prev.map((t) => (t.id === taskId ? update(t) : t))),
-    [onUpdateTasks]
+    (taskId: string, update: (t: Task) => Task) => changeTasks((prev) => prev.map((t) => (t.id === taskId ? update(t) : t))),
+    [changeTasks]
   );
 
   // Shared by the box on the canvas and the details panel
@@ -103,9 +117,9 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
       const now = Date.now();
       // Stagger createdAt so the checklist keeps the typed order
       const created = titles.map((title, i) => ({ ...createMapTask(projectId, nodeId, title), createdAt: now + i }));
-      onUpdateTasks((prev) => [...prev, ...created]);
+      changeTasks((prev) => [...prev, ...created]);
     },
-    [activeProject, onUpdateTasks]
+    [activeProject, changeTasks]
   );
 
   const toggleTaskDone = useCallback(
@@ -172,6 +186,8 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
         const result = text.trimStart().startsWith('<')
           ? await importDrawioFile(projects, tasks, text, file.name)
           : importMapFile(projects, tasks, JSON.parse(text));
+        // Undoable when it updates the open project; importing a new one switches (and clears) history
+        record();
         onUpdateProjects(result.projects);
         onUpdateTasks(result.tasks);
         setActiveProjectId(result.projectId);
@@ -344,6 +360,8 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
           onUpdateProject={updateActiveProject}
           onAddModuleTasks={addModuleTasks}
           onToggleTaskDone={toggleTaskDone}
+          onUndo={history.canUndo ? history.undo : undefined}
+          onRedo={history.canRedo ? history.redo : undefined}
         />
       </div>
 
@@ -373,18 +391,18 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
           onRenameTask={(task, title) => updateTask(task.id, (t) => ({ ...t, title }))}
           onToggleTaskOnBoard={(task) => updateTask(task.id, (t) => setTaskOnBoard(t, t.isOnBoard === false))}
           onSendAllOpenToBoard={() =>
-            onUpdateTasks((prev) =>
+            changeTasks((prev) =>
               prev.map((t) =>
                 t.linkedProjectId === projectId && t.linkedModuleId === selectedNode.id && !isTaskDone(t) ? setTaskOnBoard(t, true) : t
               )
             )
           }
-          onDeleteTask={(task) => onUpdateTasks((prev) => prev.filter((t) => t.id !== task.id))}
+          onDeleteTask={(task) => changeTasks((prev) => prev.filter((t) => t.id !== task.id))}
           onEditTask={onEditTask}
           onDeleteModule={(keepCards) => {
             const nodeId = selectedNode.id;
             const isModuleTask = (t: Task) => t.linkedProjectId === projectId && t.linkedModuleId === nodeId;
-            onUpdateTasks((prev) =>
+            changeTasks((prev) =>
               keepCards
                 ? prev.map((t) => (isModuleTask(t) ? { ...t, linkedProjectId: undefined, linkedModuleId: undefined, isOnBoard: true } : t))
                 : prev.filter((t) => !isModuleTask(t))
