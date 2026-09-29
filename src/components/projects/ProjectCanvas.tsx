@@ -157,12 +157,30 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     [onUpdateProject]
   );
 
+  const toggleNodeLock = useCallback(
+    (nodeId: string) =>
+      onUpdateProject((p) => ({ ...p, nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, isLocked: !n.isLocked || undefined } : n)) })),
+    [onUpdateProject]
+  );
+
   // Derived flow nodes; local state only carries in-progress drags and selection
   const derivedNodes = useMemo<Node[]>(() => {
     const byModule = groupTasksByModule(tasks, project.id);
     return project.nodes.map((n): Node => {
-      const base = { id: n.id, position: { x: n.x, y: n.y }, selected: n.id === selectedNodeId };
-      const colorProps = { colorKey: n.color, onSetColor: (color: MapColor | undefined) => setNodeColor(n.id, color) };
+      // Locked boxes stay put: React Flow won't drag or keyboard-delete them
+      const base = {
+        id: n.id,
+        position: { x: n.x, y: n.y },
+        selected: n.id === selectedNodeId,
+        draggable: !n.isLocked,
+        deletable: !n.isLocked,
+      };
+      const toolbarProps = {
+        colorKey: n.color,
+        onSetColor: (color: MapColor | undefined) => setNodeColor(n.id, color),
+        isLocked: !!n.isLocked,
+        onToggleLock: () => toggleNodeLock(n.id),
+      };
       if (n.kind === 'frame') {
         return {
           ...base,
@@ -170,7 +188,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           zIndex: -1,
           style: { width: n.width ?? MAP_GRID * 12, height: n.height ?? MAP_GRID * 10 },
           data: {
-            ...colorProps,
+            ...toolbarProps,
             title: n.title,
             onRename: (title: string) => renameNode(n.id, title),
             onResized: (s: { x: number; y: number; width: number; height: number }) =>
@@ -179,14 +197,14 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         };
       }
       if (n.kind === 'note') {
-        return { ...base, type: 'note', data: { ...colorProps, title: n.title, onRename: (title: string) => renameNode(n.id, title) } };
+        return { ...base, type: 'note', data: { ...toolbarProps, title: n.title, onRename: (title: string) => renameNode(n.id, title) } };
       }
       const moduleTasks = byModule.get(n.id) || [];
       return {
         ...base,
         type: 'module',
         data: {
-          ...colorProps,
+          ...toolbarProps,
           title: n.title,
           color: project.color,
           progress: getModuleProgress(n, moduleTasks),
@@ -211,6 +229,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     autoEditNodeId,
     renameNode,
     setNodeColor,
+    toggleNodeLock,
     onUpdateProject,
     onSelectModule,
     onAddModuleTasks,
@@ -298,7 +317,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
       }
       const children = new Map<string, { x: number; y: number }>();
       project.nodes.forEach((n) => {
-        if (n.id !== frame.id && n.kind !== 'frame' && isInsideFrame(n, frame)) children.set(n.id, { x: n.x, y: n.y });
+        if (n.id !== frame.id && n.kind !== 'frame' && !n.isLocked && isInsideFrame(n, frame)) children.set(n.id, { x: n.x, y: n.y });
       });
       frameDragRef.current = { frameStart: { x: frame.x, y: frame.y }, children };
     },

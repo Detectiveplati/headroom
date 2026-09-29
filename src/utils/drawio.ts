@@ -138,12 +138,14 @@ function vertexXml(cell: ExportCell, parent: MapNode | undefined): string {
     node.isDoneManual ? 'headroomDone="1"' : '',
     `id="${escXml(node.id)}"`,
   ].filter(Boolean);
+  // draw.io's own lock, so the shape is pinned there too
+  const style = node.isLocked ? `${cell.style}locked=1;` : cell.style;
   // Children of a frame are positioned relative to it
   const x = parent ? node.x - parent.x : node.x;
   const y = parent ? node.y - parent.y : node.y;
   return (
     `        <UserObject ${attrs.join(' ')}>\n` +
-    `          <mxCell style="${escXml(cell.style)}" vertex="1" parent="${parent ? escXml(parent.id) : '1'}">\n` +
+    `          <mxCell style="${escXml(style)}" vertex="1" parent="${parent ? escXml(parent.id) : '1'}">\n` +
     `            <mxGeometry x="${Math.round(x)}" y="${Math.round(y)}" width="${Math.round(cell.width)}" height="${Math.round(cell.height)}" as="geometry" />\n` +
     '          </mxCell>\n' +
     '        </UserObject>\n'
@@ -326,6 +328,7 @@ interface ParsedBox {
   notes?: string;
   color?: MapColor;
   isDoneManual?: boolean;
+  isLocked?: boolean;
   tasks: { title: string; done: boolean }[];
   x: number;
   y: number;
@@ -344,6 +347,7 @@ function parseBox(cell: RawCell, x: number, y: number): ParsedBox | null {
     color: colorOf(cell),
     notes: cell.attrs?.getAttribute('tooltip')?.trim() || undefined,
     isDoneManual: cell.attrs?.getAttribute('headroomDone') === '1' || undefined,
+    isLocked: cell.style.get('locked') === '1' || undefined,
     tasks: [],
     x: Math.round(x),
     y: Math.round(y),
@@ -455,6 +459,7 @@ export async function importDrawioFile(
         color: box.color,
         notes: box.notes ?? node.notes,
         isDoneManual: box.isDoneManual,
+        isLocked: box.isLocked,
       };
       cellToNode.set(box.cell.id, node.id);
       updatedNodes++;
@@ -469,6 +474,7 @@ export async function importDrawioFile(
         x: box.x,
         y: box.y,
         isDoneManual: box.isDoneManual,
+        isLocked: box.isLocked,
         ...size,
       };
       project.nodes.push(node);

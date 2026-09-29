@@ -171,6 +171,7 @@ function normalizeNode(raw: unknown): MapNode | null {
     width: n.width !== undefined ? num(n.width) : undefined,
     height: n.height !== undefined ? num(n.height) : undefined,
     isDoneManual: n.isDoneManual === true ? true : undefined,
+    isLocked: n.isLocked === true ? true : undefined,
     seedKey: optionalStr(n.seedKey),
   };
 }

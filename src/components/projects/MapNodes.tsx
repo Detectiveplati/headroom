@@ -12,16 +12,18 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
 } from '@xyflow/react';
-import { Check, X, Plus, PanelRightOpen, Trash2 } from 'lucide-react';
+import { Check, X, Plus, PanelRightOpen, Trash2, Lock, Unlock } from 'lucide-react';
 import { Task, MapColor, MapLinkStyle } from '../../types';
 import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, ModuleProgress, isTaskDone, mapColorHex } from '../../utils/projectMap';
 
-interface ColorableData {
+interface BoxToolbarData {
   colorKey?: MapColor;
   onSetColor: (color: MapColor | undefined) => void;
+  isLocked: boolean;
+  onToggleLock: () => void;
 }
 
-export interface ModuleNodeData extends Record<string, unknown>, ColorableData {
+export interface ModuleNodeData extends Record<string, unknown>, BoxToolbarData {
   title: string;
   // Project colour, used when the box has no category colour
   color: string;
@@ -36,13 +38,16 @@ export interface ModuleNodeData extends Record<string, unknown>, ColorableData {
   onToggleManualDone: () => void;
 }
 
-export interface TextNodeData extends Record<string, unknown>, ColorableData {
+export interface TextNodeData extends Record<string, unknown>, BoxToolbarData {
   title: string;
   onRename: (title: string) => void;
 }
 
-/** Colour swatches shown above the selected box. */
-const ColorToolbar: React.FC<ColorableData & { isVisible: boolean }> = ({ isVisible, colorKey, onSetColor }) => (
+/** Colour swatches and the lock toggle, shown above the selected box. */
+const BoxToolbar: React.FC<{ isVisible: boolean; data: BoxToolbarData }> = ({
+  isVisible,
+  data: { colorKey, onSetColor, isLocked, onToggleLock },
+}) => (
   <NodeToolbar isVisible={isVisible} offset={8}>
     <div className="nodrag flex items-center gap-1 px-1.5 py-1 rounded-full bg-offwhite-surface dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-md">
       {MAP_COLORS.map((c) => (
@@ -61,8 +66,25 @@ const ColorToolbar: React.FC<ColorableData & { isVisible: boolean }> = ({ isVisi
       >
         <X className="w-3 h-3" />
       </button>
+      <span className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
+      <button
+        onClick={onToggleLock}
+        title={isLocked ? 'Unlock: allow moving, resizing and deleting' : 'Lock in place: no moving, resizing or deleting'}
+        className={`h-5 w-5 rounded-full flex items-center justify-center transition ${
+          isLocked ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+        }`}
+      >
+        {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+      </button>
     </div>
   </NodeToolbar>
+);
+
+/** Small marker on a locked box. */
+const LockBadge: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <span title="Locked" className={`text-zinc-400 dark:text-zinc-500 ${className}`}>
+    <Lock className="w-3 h-3" />
+  </span>
 );
 
 export type ModuleFlowNode = Node<ModuleNodeData, 'module'>;
@@ -154,7 +176,7 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
         selected ? 'border-brand-500 ring-2 ring-brand-500/40 shadow-md' : 'border-zinc-300/80 dark:border-zinc-700/80'
       } ${isDone ? 'opacity-80' : ''}`}
     >
-      <ColorToolbar isVisible={!!selected} colorKey={data.colorKey} onSetColor={data.onSetColor} />
+      <BoxToolbar isVisible={!!selected} data={data} />
       <SideHandles />
       <div className="p-2.5 space-y-2">
         <div className="flex items-start gap-2">
@@ -194,6 +216,7 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
               {data.title || 'Untitled module'}
             </span>
           )}
+          {data.isLocked && <LockBadge className="mt-0.5" />}
           <button
             onClick={data.onOpenDetails}
             title="Open details (notes, board, delete)"
@@ -267,7 +290,7 @@ export const NoteNode: React.FC<NodeProps<NoteFlowNode>> = ({ data, selected }) 
   return (
     <div
       onDoubleClick={edit.start}
-      className={`w-full h-full min-w-[120px] min-h-[48px] rounded-lg bg-amber-100 dark:bg-amber-900/40 border shadow-sm p-2.5 ${
+      className={`relative w-full h-full min-w-[120px] min-h-[48px] rounded-lg bg-amber-100 dark:bg-amber-900/40 border shadow-sm p-2.5 ${
         selected ? 'border-amber-500 ring-2 ring-amber-500/40' : 'border-amber-300 dark:border-amber-700/60'
       }`}
       style={{
@@ -276,8 +299,9 @@ export const NoteNode: React.FC<NodeProps<NoteFlowNode>> = ({ data, selected }) 
         ...(noteColor ? { backgroundColor: `${noteColor}33`, borderColor: noteColor } : {}),
       }}
     >
-      <ColorToolbar isVisible={!!selected} colorKey={data.colorKey} onSetColor={data.onSetColor} />
+      <BoxToolbar isVisible={!!selected} data={data} />
       <SideHandles />
+      {data.isLocked && <LockBadge className="absolute top-1.5 right-1.5" />}
       {edit.isEditing ? (
         <textarea
           autoFocus
@@ -313,9 +337,9 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
   const frameColor = mapColorHex(data.colorKey);
   return (
     <>
-      <ColorToolbar isVisible={!!selected} colorKey={data.colorKey} onSetColor={data.onSetColor} />
+      <BoxToolbar isVisible={!!selected} data={data} />
       <NodeResizer
-        isVisible={selected}
+        isVisible={selected && !data.isLocked}
         minWidth={MAP_GRID * 6}
         minHeight={MAP_GRID * 4}
         lineClassName="!border-brand-500"
@@ -328,7 +352,7 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
         }`}
         style={frameColor ? { borderColor: selected ? undefined : `${frameColor}99`, backgroundColor: `${frameColor}0f` } : undefined}
       >
-        <div onDoubleClick={edit.start} className="px-3 py-1.5" style={frameColor ? { color: frameColor } : undefined}>
+        <div onDoubleClick={edit.start} className="px-3 py-1.5 flex items-center gap-1.5" style={frameColor ? { color: frameColor } : undefined}>
           {edit.isEditing ? (
             <input
               autoFocus
@@ -346,6 +370,7 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
               {data.title || 'Frame'}
             </span>
           )}
+          {data.isLocked && <LockBadge />}
         </div>
       </div>
     </>

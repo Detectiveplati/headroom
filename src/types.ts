@@ -102,6 +102,8 @@ export interface MapNode {
   height?: number;
   // Only used when a module has no tasks; otherwise done is computed from its cards
   isDoneManual?: boolean;
+  // Pinned in place: can't be dragged, resized or deleted until unlocked
+  isLocked?: boolean;
   // Stable key from an imported map file, so re-importing never duplicates
   seedKey?: string;
 }

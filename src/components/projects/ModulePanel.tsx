@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Check, Trash2, LayoutGrid, Plus, Edit3, Send } from 'lucide-react';
+import { X, Check, Trash2, LayoutGrid, Plus, Edit3, Send, Lock } from 'lucide-react';
 import { MapNode, Task } from '../../types';
 import { getModuleProgress, isTaskDone } from '../../utils/projectMap';
 
@@ -255,7 +255,11 @@ export const ModulePanel: React.FC<ModulePanelProps> = ({
 
       {/* Delete */}
       <div className="p-4 border-t border-zinc-200 dark:border-zinc-800">
-        {confirmDelete ? (
+        {node.isLocked ? (
+          <p className="text-xs text-zinc-400 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5" /> Locked. Unlock it from the box's toolbar to delete it.
+          </p>
+        ) : confirmDelete ? (
           <div className="space-y-2">
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
               {tasks.length > 0 ? `What should happen to this module's ${tasks.length} cards?` : 'Delete this module?'}
