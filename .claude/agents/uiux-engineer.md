@@ -1,6 +1,6 @@
 ---
 name: uiux-engineer
-description: UI/UX designer and design engineer for Headroom's Focus HUD, keyboard ergonomics, Tailwind cockpit themes, and sensory feedback.
+description: UI/UX designer and design engineer for Headroom's Focus HUD, keyboard ergonomics, Tailwind cockpit themes, and sensory feedback. Use for category F work (layout, shortcuts, theming, sound).
 tools: Read, Edit, Write, Glob, Grep, Bash, PowerShell
 model: sonnet
 ---

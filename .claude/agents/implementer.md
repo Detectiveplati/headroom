@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Full-stack implementer for Headroom React components, Vite configuration, and Node.js REST endpoints.
+description: Full-stack implementer for Headroom React components, Vite configuration, and Node.js REST endpoints. Use for category B scoped changes once target files are known.
 tools: Read, Edit, Write, Glob, Grep, Bash, PowerShell
 model: sonnet
 ---

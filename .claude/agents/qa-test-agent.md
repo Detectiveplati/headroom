@@ -1,6 +1,6 @@
 ---
 name: qa-test-agent
-description: Verification agent for Headroom that runs typecheck, build validations, and smoke tests without altering code.
+description: Verification agent for Headroom that runs typecheck, build validations, and smoke tests without altering code. Use after implementation to run the build and report results.
 tools: Read, Glob, Grep, Bash, PowerShell
 model: haiku
 ---

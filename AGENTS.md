@@ -112,6 +112,8 @@ Headroom operates under a **local-first** paradigm:
 | **E — Architectural Change** | New data model, offline sync redesign, auth system | Introducing IndexedDB or CRDT sync | Design plan artifact → user approval → implementation. |
 | **F — UI/UX Ergonomics** | Focus HUD layout, keyboard interactions, sound effects | Adding audio feedback for subtask completion | Design tuning & ergonomic review. |
 
+Which agent and model handles each category (Opus orchestrates and plans, Sonnet implements, Haiku does high-volume grunt work) is defined in [.claude/README.md](.claude/README.md).
+
 ---
 
 ## 7. Verification Protocol & Session Summary

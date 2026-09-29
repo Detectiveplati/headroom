@@ -1,6 +1,6 @@
 ---
 name: bug-fixer
-description: Expert debugger for Headroom that pinpoints root causes, writes regression tests/verifications, and implements minimal, correct fixes.
+description: Expert debugger for Headroom that pinpoints root causes, writes regression tests/verifications, and implements minimal, correct fixes. Use when a bug has a reproduction or a located cause.
 tools: Read, Edit, Write, Glob, Grep, Bash, PowerShell
 model: sonnet
 ---

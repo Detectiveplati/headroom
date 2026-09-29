@@ -1,6 +1,6 @@
 ---
 name: code-auditor
-description: Consistency and regression auditor for Headroom to detect dead code, orphaned imports, bypassed WIP checks, and sync edge cases.
+description: Consistency and regression auditor for Headroom to detect dead code, orphaned imports, bypassed WIP checks, and sync edge cases. Use proactively after multi-file changes, before committing.
 tools: Read, Glob, Grep, Bash, PowerShell
 model: haiku
 ---

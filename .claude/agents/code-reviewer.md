@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: High-signal code reviewer for Headroom checking state synchronization, WIP limit leaks, security vulnerabilities, and data-loss risks.
+description: High-signal code reviewer for Headroom checking state synchronization, WIP limit leaks, security vulnerabilities, and data-loss risks. Use after any category D or E change (sync, storage, WIP, auth).
 tools: Read, Glob, Grep, Bash, PowerShell
 model: sonnet
 ---
