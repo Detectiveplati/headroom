@@ -39,7 +39,8 @@ import {
   loadStoredUploadLogs,
   saveStoredUploadLogs,
   loadStoredProjects,
-  saveStoredProjects
+  saveStoredProjects,
+  normalizeProjects
 } from './utils/storage';
 import { soundManager } from './utils/audio';
 import { getMeApi, logoutApi } from './utils/auth';
@@ -323,8 +324,9 @@ export const App: React.FC = () => {
             setActiveTaskId(result.data.activeTaskId);
           }
           if (Array.isArray(result.data.projects)) {
-            setProjects(result.data.projects);
-            saveStoredProjects(result.data.projects);
+            const remoteProjects = normalizeProjects(result.data.projects);
+            setProjects(remoteProjects);
+            saveStoredProjects(remoteProjects);
           }
           lastLocalEditTimeRef.current = remoteTime;
           setTimeout(() => {
@@ -403,8 +405,9 @@ export const App: React.FC = () => {
         if (res.data.settings) setSettings(res.data.settings);
         if (res.data.activeTaskId !== undefined) setActiveTaskId(res.data.activeTaskId);
         if (Array.isArray(res.data.projects)) {
-          setProjects(res.data.projects);
-          saveStoredProjects(res.data.projects);
+          const remoteProjects = normalizeProjects(res.data.projects);
+          setProjects(remoteProjects);
+          saveStoredProjects(remoteProjects);
         }
         setSyncStatus('synced');
         setTimeout(() => {

@@ -86,6 +86,8 @@ const TABLE_INIT_SQL = `
     updated_at BIGINT NOT NULL
   );
 
+  ALTER TABLE boards ADD COLUMN IF NOT EXISTS projects JSONB;
+
   CREATE TABLE IF NOT EXISTS expense_rules (
     pattern VARCHAR(255) PRIMARY KEY,
     category VARCHAR(100) NOT NULL,
@@ -412,6 +414,8 @@ export async function getBoard(boardId = 'default') {
           tasks: row.tasks,
           settings: row.settings,
           activeTaskId: row.active_task_id,
+          // NULL for boards saved before projects were persisted: omit so clients keep their local copy
+          ...(Array.isArray(row.projects) ? { projects: row.projects } : {}),
           updatedAt: Number(row.updated_at),
         };
       }
@@ -428,25 +432,38 @@ export async function getBoard(boardId = 'default') {
 
 export async function saveBoard(boardId = 'default', boardData) {
   const { tasks = [], settings = {}, activeTaskId = null, updatedAt = Date.now() } = boardData;
+  // A payload without a projects array (e.g. an older client) must not wipe the stored projects
+  const projects = Array.isArray(boardData.projects) ? boardData.projects : undefined;
 
   if (pool) {
     try {
-      await pool.query(`
-        INSERT INTO boards (id, tasks, settings, active_task_id, updated_at)
-        VALUES ($1, $2, $3, $4, $5)
+      const res = await pool.query(`
+        INSERT INTO boards (id, tasks, settings, active_task_id, projects, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (id) DO UPDATE SET
           tasks = EXCLUDED.tasks,
           settings = EXCLUDED.settings,
           active_task_id = EXCLUDED.active_task_id,
-          updated_at = EXCLUDED.updated_at;
+          projects = COALESCE(EXCLUDED.projects, boards.projects),
+          updated_at = EXCLUDED.updated_at
+        RETURNING projects;
       `, [
         boardId,
         JSON.stringify(tasks),
         JSON.stringify(settings),
         activeTaskId,
+        projects ? JSON.stringify(projects) : null,
         updatedAt,
       ]);
-      return { id: boardId, tasks, settings, activeTaskId, updatedAt };
+      const storedProjects = res.rows[0]?.projects;
+      return {
+        id: boardId,
+        tasks,
+        settings,
+        activeTaskId,
+        ...(Array.isArray(storedProjects) ? { projects: storedProjects } : {}),
+        updatedAt,
+      };
     } catch (err) {
       console.error('[Database] PostgreSQL saveBoard error:', err.message);
     }
@@ -454,11 +471,13 @@ export async function saveBoard(boardId = 'default', boardData) {
 
   // Fallback to file storage
   ensureFileStore();
+  const storedProjects = projects ?? fileStoreCache.boards[boardId]?.projects;
   const entry = {
     id: boardId,
     tasks,
     settings,
     activeTaskId,
+    ...(Array.isArray(storedProjects) ? { projects: storedProjects } : {}),
     updatedAt,
   };
   fileStoreCache.boards[boardId] = entry;

@@ -448,8 +448,21 @@ export function loadStoredProjects(): Project[] {
       return [];
     }
 
-    // Defensively sanitize properties
-    return cleaned.map((p) => ({
+    return normalizeProjects(cleaned);
+  } catch (e) {
+    console.error('Failed to load projects from localStorage', e);
+    return [];
+  }
+}
+
+/**
+ * Defensively sanitize project data loaded from localStorage or the sync API.
+ */
+export function normalizeProjects(raw: unknown): Project[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((p) => p && typeof p === 'object')
+    .map((p: any) => ({
       id: String(p?.id || `proj-${Date.now()}`),
       name: String(p?.name || 'Untitled Project'),
       description: String(p?.description || ''),
@@ -493,10 +506,6 @@ export function loadStoredProjects(): Project[] {
           }))
         : [],
     }));
-  } catch (e) {
-    console.error('Failed to load projects from localStorage', e);
-    return [];
-  }
 }
 
 export function saveStoredProjects(projects: Project[]): void {
