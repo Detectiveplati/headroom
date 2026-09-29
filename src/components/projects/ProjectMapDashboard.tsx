@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderGit2, FolderPlus, Plus, Upload, Trash2, ChevronDown, X } from 'lucide-react';
+import { FolderGit2, FolderPlus, Plus, Upload, Download, Trash2, ChevronDown, X } from 'lucide-react';
 import { Project, Task } from '../../types';
 import {
   PROJECT_COLORS,
@@ -12,6 +12,8 @@ import {
   setTaskDone,
   setTaskOnBoard,
 } from '../../utils/projectMap';
+import { exportProjectToDrawio, importDrawioFile } from '../../utils/drawio';
+import { downloadFile } from '../../utils/storage';
 import { soundManager } from '../../utils/audio';
 import { ProjectCanvas } from './ProjectCanvas';
 import { ModulePanel } from './ModulePanel';
@@ -163,18 +165,29 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
     e.target.value = '';
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
-        const result = importMapFile(projects, tasks, JSON.parse(String(reader.result)));
+        const text = String(reader.result);
+        // draw.io files are XML; map files are JSON
+        const result = text.trimStart().startsWith('<')
+          ? await importDrawioFile(projects, tasks, text, file.name)
+          : importMapFile(projects, tasks, JSON.parse(text));
         onUpdateProjects(result.projects);
         onUpdateTasks(result.tasks);
         setActiveProjectId(result.projectId);
+        setSelectedNodeId(null);
         setImportMessage({ ok: true, text: result.summary });
       } catch (err) {
         setImportMessage({ ok: false, text: err instanceof Error ? err.message : 'Could not read that file.' });
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleExportDrawio = () => {
+    if (!activeProject) return;
+    const slug = activeProject.name.trim().replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
+    downloadFile(`${slug}.drawio`, exportProjectToDrawio(activeProject, tasks), 'application/vnd.jgraph.mxfile');
   };
 
   const newProjectForm = isNewProjectOpen && (
@@ -217,7 +230,9 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
     </div>
   );
 
-  const fileInput = <input ref={fileInputRef} type="file" accept=".json,application/json" className="hidden" onChange={handleImportFile} />;
+  const fileInput = (
+    <input ref={fileInputRef} type="file" accept=".json,.drawio,.xml,application/json" className="hidden" onChange={handleImportFile} />
+  );
 
   const importBanner = importMessage && (
     <div
@@ -251,7 +266,7 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
             <Plus className="w-4 h-4" /> New project
           </button>
           <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold flex items-center gap-2">
-            <Upload className="w-4 h-4" /> Import map file
+            <Upload className="w-4 h-4" /> Import map or draw.io file
           </button>
         </div>
         {importBanner}
@@ -303,8 +318,11 @@ export const ProjectMapDashboard: React.FC<ProjectMapDashboardProps> = ({
           <button onClick={() => setIsNewProjectOpen(true)} className="p-2 rounded-lg text-zinc-500 hover:text-brand-600 hover:bg-brand-500/10 transition" title="New project">
             <FolderPlus className="w-4 h-4" />
           </button>
-          <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg text-zinc-500 hover:text-brand-600 hover:bg-brand-500/10 transition" title="Import map file (safe to re-import)">
+          <button onClick={() => fileInputRef.current?.click()} className="p-2 rounded-lg text-zinc-500 hover:text-brand-600 hover:bg-brand-500/10 transition" title="Import a map or draw.io file (safe to re-import)">
             <Upload className="w-4 h-4" />
+          </button>
+          <button onClick={handleExportDrawio} className="p-2 rounded-lg text-zinc-500 hover:text-brand-600 hover:bg-brand-500/10 transition" title="Export to draw.io (open in draw.io to save as Visio)">
+            <Download className="w-4 h-4" />
           </button>
           <button onClick={handleDeleteProject} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-500/10 transition" title="Delete project">
             <Trash2 className="w-4 h-4" />

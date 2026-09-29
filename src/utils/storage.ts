@@ -202,11 +202,16 @@ export function exportBoardData(tasks: Task[], settings: AppSettings): void {
     tasks,
   };
 
-  const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+  downloadFile(`headroom-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(exportPayload, null, 2), 'application/json');
+}
+
+/** Saves text as a file through the browser's download flow. */
+export function downloadFile(filename: string, content: string, type: string): void {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `headroom-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

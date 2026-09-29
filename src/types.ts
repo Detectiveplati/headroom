@@ -110,9 +110,6 @@ export interface MapLink {
   id: string;
   fromNodeId: string;
   toNodeId: string;
-  // Which side of each box the line attaches to ('t' | 'r' | 'b' | 'l')
-  fromHandle?: string;
-  toHandle?: string;
   label?: string;
   style: MapLinkStyle;
 }

@@ -6,7 +6,6 @@ export const MODULE_WIDTH = MAP_GRID * 7;
 
 const NODE_KINDS: MapNodeKind[] = ['module', 'note', 'frame'];
 export const LINK_STYLES: MapLinkStyle[] = ['plain', 'dashed', 'blocks'];
-export const HANDLE_IDS = ['t', 'r', 'b', 'l'];
 
 // One clear hue per category, so boxes are easy to tell apart at a glance
 export const MAP_COLORS: { key: MapColor; label: string; hex: string }[] = [
@@ -51,6 +50,13 @@ function num(value: unknown, fallback = 0): number {
 function optionalStr(value: unknown): string | undefined {
   const s = str(value).trim();
   return s ? s : undefined;
+}
+
+/** A box sits in a frame when its top-left corner is inside it. */
+export function isInsideFrame(node: MapNode, frame: MapNode): boolean {
+  const w = frame.width ?? 0;
+  const h = frame.height ?? 0;
+  return node.x >= frame.x && node.y >= frame.y && node.x < frame.x + w && node.y < frame.y + h;
 }
 
 // ==================== TASK HELPERS ====================
@@ -179,8 +185,6 @@ function normalizeLink(raw: unknown, nodeIds: Set<string>): MapLink | null {
     id: str(l.id) || makeId('link'),
     fromNodeId,
     toNodeId,
-    fromHandle: HANDLE_IDS.includes(str(l.fromHandle)) ? str(l.fromHandle) : undefined,
-    toHandle: HANDLE_IDS.includes(str(l.toHandle)) ? str(l.toHandle) : undefined,
     label: optionalStr(l.label),
     style: LINK_STYLES.includes(l.style as MapLinkStyle) ? (l.style as MapLinkStyle) : 'plain',
   };

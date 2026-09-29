@@ -24,7 +24,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Plus, StickyNote, Frame, Magnet, Maximize2 } from 'lucide-react';
 import { Project, Task, MapNode, MapLink, MapNodeKind, MapColor } from '../../types';
-import { MAP_GRID, LINK_STYLES, groupTasksByModule, getModuleProgress, makeId, mapColorHex } from '../../utils/projectMap';
+import { MAP_GRID, MODULE_WIDTH, LINK_STYLES, groupTasksByModule, getModuleProgress, isInsideFrame, makeId, mapColorHex } from '../../utils/projectMap';
 import { ModuleNode, NoteNode, FrameNode, LinkEdge, LinkFlowEdge } from './MapNodes';
 
 const NODE_TYPES = { module: ModuleNode, note: NoteNode, frame: FrameNode };
@@ -53,37 +53,53 @@ function useIsDarkMode(): boolean {
   return isDark;
 }
 
-// Lines without chosen sides (e.g. imported) attach on the sides facing each other
-function facingHandles(from: MapNode | undefined, to: MapNode | undefined): [string, string] {
+interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// Used until React Flow has measured a box
+const FALLBACK_BOX_HEIGHT = MAP_GRID * 5;
+
+/**
+ * Lines attach on the sides that face each other: a box wholly above or below joins
+ * bottom-to-top (so a parent's lines fan out like a tree instead of crossing), boxes
+ * side by side join left-to-right, and overlapping boxes go by which way is further.
+ */
+function facingHandles(from: Box | undefined, to: Box | undefined): [string, string] {
   if (!from || !to) return ['r', 'l'];
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
+  const below = to.y - (from.y + from.h);
+  const above = from.y - (to.y + to.h);
+  if (below > 0) return ['b', 't'];
+  if (above > 0) return ['t', 'b'];
+  const right = to.x - (from.x + from.w);
+  const left = from.x - (to.x + to.w);
+  if (right > 0) return ['r', 'l'];
+  if (left > 0) return ['l', 'r'];
+  const dx = to.x + to.w / 2 - (from.x + from.w / 2);
+  const dy = to.y + to.h / 2 - (from.y + from.h / 2);
   if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? ['r', 'l'] : ['l', 'r'];
   return dy >= 0 ? ['b', 't'] : ['t', 'b'];
 }
 
-function edgeFromLink(link: MapLink, nodesById: Map<string, MapNode>, onDelete: () => void): LinkFlowEdge {
+function edgeFromLink(link: MapLink, boxes: Map<string, Box>, onDelete: () => void): LinkFlowEdge {
   const isBlocks = link.style === 'blocks';
   const stroke = isBlocks ? '#ef4444' : '#94a3b8';
-  const [autoFrom, autoTo] = facingHandles(nodesById.get(link.fromNodeId), nodesById.get(link.toNodeId));
+  const [sourceHandle, targetHandle] = facingHandles(boxes.get(link.fromNodeId), boxes.get(link.toNodeId));
   return {
     id: link.id,
     type: 'link',
     source: link.fromNodeId,
     target: link.toNodeId,
-    sourceHandle: link.fromHandle || autoFrom,
-    targetHandle: link.toHandle || autoTo,
+    sourceHandle,
+    targetHandle,
     label: link.label,
     style: { stroke, strokeWidth: isBlocks ? 2 : 1.5, strokeDasharray: link.style === 'dashed' ? '6 4' : undefined },
     markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
     data: { linkStyle: link.style, onDelete },
   };
-}
-
-function isInside(node: MapNode, frame: MapNode): boolean {
-  const w = frame.width ?? 0;
-  const h = frame.height ?? 0;
-  return node.x >= frame.x && node.y >= frame.y && node.x < frame.x + w && node.y < frame.y + h;
 }
 
 const CanvasInner: React.FC<ProjectCanvasProps> = ({
@@ -217,10 +233,37 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     [onUpdateProject]
   );
 
+  // Measured box sizes as a string, so lines only re-route when a box changes size
+  // (e.g. a task is added), not on every frame of a drag
+  const sizeKey = useMemo(
+    () => nodes.map((n) => `${n.id}:${n.measured?.width ?? ''}:${n.measured?.height ?? ''}`).join('|'),
+    [nodes]
+  );
+
   const derivedEdges = useMemo(() => {
-    const nodesById = new Map(project.nodes.map((n) => [n.id, n]));
-    return project.links.map((l) => edgeFromLink(l, nodesById, () => deleteLink(l.id)));
-  }, [project.links, project.nodes, deleteLink]);
+    const measured = new Map(
+      sizeKey.split('|').map((entry): [string, { w: number; h: number }] => {
+        const [id, w, h] = entry.split(':');
+        return [id, { w: Number(w), h: Number(h) }];
+      })
+    );
+    // Positions come from the saved project, so lines settle when a drag ends
+    const boxes = new Map<string, Box>(
+      project.nodes.map((n) => {
+        const size = measured.get(n.id);
+        return [
+          n.id,
+          {
+            x: n.x,
+            y: n.y,
+            w: size?.w || n.width || MODULE_WIDTH,
+            h: size?.h || n.height || FALLBACK_BOX_HEIGHT,
+          },
+        ];
+      })
+    );
+    return project.links.map((l) => edgeFromLink(l, boxes, () => deleteLink(l.id)));
+  }, [project.links, project.nodes, sizeKey, deleteLink]);
 
   // Lines are selectable like nodes: click one to show its delete button
   const [edges, setEdges] = useState<Edge[]>(derivedEdges);
@@ -250,7 +293,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
       }
       const children = new Map<string, { x: number; y: number }>();
       project.nodes.forEach((n) => {
-        if (n.id !== frame.id && n.kind !== 'frame' && isInside(n, frame)) children.set(n.id, { x: n.x, y: n.y });
+        if (n.id !== frame.id && n.kind !== 'frame' && isInsideFrame(n, frame)) children.set(n.id, { x: n.x, y: n.y });
       });
       frameDragRef.current = { frameStart: { x: frame.x, y: frame.y }, children };
     },
