@@ -1,0 +1,144 @@
+{
+  "_note": "Starter map for the ChilliOS project, taken from docs/DELIVERY_PLAN_v4.md, docs/AI_HANDOFF.md and the modules present in the repo. Everything starts unticked; tick what is already done in the first session. `inRepo: true` means code for that module already exists in ChilliOS (a hint only, not proof it is finished). x/y are grid positions (multiply by the grid size); frames group the modules.",
+  "project": { "name": "ChilliOS", "colour": "#EA580C" },
+  "frames": [
+    { "key": "foundation", "title": "Foundation", "x": 0, "y": 0, "w": 12, "h": 10 },
+    { "key": "core", "title": "Food safety core", "x": 14, "y": 0, "w": 36, "h": 10 },
+    { "key": "ops", "title": "Kitchen operations", "x": 0, "y": 12, "w": 50, "h": 10 },
+    { "key": "finish", "title": "Finish line", "x": 0, "y": 24, "w": 50, "h": 10 }
+  ],
+  "modules": [
+    {
+      "key": "foundation", "frame": "foundation", "x": 1, "y": 1, "title": "Phase 0 — Foundation", "inRepo": true,
+      "notes": "Auth, infra, environments. Gate: services provisioned, Render + Neon branches, Cloudflare DNS.",
+      "tasks": [
+        "Monorepo scaffold", "Validated env config (APP_ENV)", "CF-RAY origin-lock middleware",
+        "Staging banner", "Lucia login / logout / session", "Admin user management UI",
+        "Per-module permissions", "Render pipeline (staging + production)",
+        "CI workflows: lint, typecheck, test", "Docker Compose for local dev"
+      ]
+    },
+    {
+      "key": "tempmon", "frame": "core", "x": 15, "y": 1, "title": "Phase 1 + 1B — TempMon & LoRa", "inRepo": true,
+      "notes": "Hardware-critical. Fridge/warmer temperature monitoring fed by LoRa sensors.",
+      "tasks": [
+        "Telemetry schema", "31 units seeded with sensor serials", "Warmer fault state machine (100% tests)",
+        "Excursion timer on sensor time", "Alerts: create, acknowledge, auto-resolve",
+        "Ingest endpoint with gateway key", "Device-offline cron",
+        "Dashboard, unit detail, alerts, calibration pages",
+        "LoRa decision: direct HTTP vs Fly.io TCP bridge", "Sensor registry & discovery", "Mock sensor script for staging"
+      ]
+    },
+    {
+      "key": "food_safety", "frame": "core", "x": 24, "y": 1, "title": "Phase 2 — Food Safety Checklists", "inRepo": true,
+      "notes": "Most complex for users. 13 templates, multi-language, 2 weeks UAT.",
+      "tasks": [
+        "Food safety schema", "13 templates seeded", "Matrix monthly renderer", "Log-entry renderer",
+        "Draft → Finalise → Verify with signature", "PDF generation to R2",
+        "TempMon → monthly report bridge", "EN / ZH / TA translations",
+        "Forms workspace & reports dashboard", "Move off old AppHeader (UI redesign)"
+      ]
+    },
+    {
+      "key": "iso", "frame": "core", "x": 33, "y": 1, "title": "Phase 3 — ISO e-Forms Tracker", "inRepo": false,
+      "notes": "Shares the checklist engine. Filing status: Not Filed / Up to Date / N months late.",
+      "tasks": [
+        "ISO records & employee tables", "34 default records seeded", "Computed filing status",
+        "One-tap \"Filed Today\"", "XLSX export", "Employee registry CRUD"
+      ]
+    },
+    {
+      "key": "walkabout", "frame": "core", "x": 42, "y": 1, "title": "Phase 6 — FSO Walkabout", "inRepo": false,
+      "notes": "New module. Scope must be confirmed with the Food Safety team before building.",
+      "tasks": [
+        "Confirm scope with Food Safety team", "Sessions & findings tables", "Finding photos to R2",
+        "Flagged finding creates NC record", "PDF report per session", "Session history & filters"
+      ]
+    },
+    {
+      "key": "labels", "frame": "ops", "x": 1, "y": 13, "title": "Phase 4 — Brother Label Printing", "inRepo": true,
+      "notes": "Hardware-dependent (QL-820NWB over Web Serial / Bluetooth).",
+      "tasks": [
+        "Labels schema", "Department-scoped access", "Staff print UI (search, quick print)",
+        "Web Serial printer connection", "Printer status parser", "Bluetooth auto-reconnect",
+        "Label designer (admin)", "Print audit & diagnostic logs", "Admin CRUD: templates, items, printers"
+      ]
+    },
+    {
+      "key": "compliance", "frame": "ops", "x": 10, "y": 13, "title": "Phase 5 — Certificates & Licences", "inRepo": false,
+      "notes": "Staff certificates and entity licences with expiry tracking.",
+      "tasks": [
+        "Compliance schema", "Validity status (valid / expiring / expired)", "Daily expiry cron + notifications",
+        "Expiry dashboard", "Certificates & licences CRUD", "XLSX export"
+      ]
+    },
+    {
+      "key": "inventory", "frame": "ops", "x": 19, "y": 13, "title": "Phase 7 — Inventory & Shelf Life", "inRepo": true,
+      "notes": "New module. Feeds shelf life into label printing.",
+      "tasks": [
+        "Confirm scope with Kitchen/QA", "Products, specs, shelf-life schema", "Versioned product specs",
+        "Shelf life calculator", "Label items pull shelf life automatically", "Product catalog UI"
+      ]
+    },
+    {
+      "key": "orders", "frame": "ops", "x": 28, "y": 13, "title": "Phase 8 — Kitchen Order Extraction", "inRepo": true,
+      "notes": "Three daily extraction runs (04:00, 14:00, 20:00 SGT).",
+      "tasks": [
+        "Orders schema", "Three daily extraction crons", "Job lock & catch-up window",
+        "Daily refresh diff (new / edited flags)", "Department mapping & dish catalog", "Order summary page", "KDS / production screens"
+      ]
+    },
+    {
+      "key": "assets", "frame": "ops", "x": 37, "y": 13, "title": "Assets & Corrective Actions", "inRepo": true,
+      "notes": "In the repo but not in the delivery plan. Confirm where it sits.",
+      "tasks": ["Asset register", "Asset detail page", "QR report page", "Corrective action reports (CAR)"]
+    },
+    {
+      "key": "kitchen_extras", "frame": "ops", "x": 44, "y": 13, "title": "Kitchen extras", "inRepo": true,
+      "notes": "Smaller modules already in the repo. Procurement was 'deferred' in the plan but code exists.",
+      "tasks": ["Ad-hoc labels", "Retention samples", "Food temperature / blast freezing", "Kitchen schedule", "Procurement requests"]
+    },
+    {
+      "key": "notifications", "frame": "finish", "x": 1, "y": 25, "title": "Notifications & Admin", "inRepo": true,
+      "notes": "",
+      "tasks": ["Push notifications", "Notification groups & rules", "Teams channel alerts", "Admin panel scope decision"]
+    },
+    {
+      "key": "ui", "frame": "finish", "x": 10, "y": 25, "title": "UI redesign", "inRepo": true,
+      "notes": "See docs/ui-migration-status.md.",
+      "tasks": ["Shared UI primitives", "Migrate modules to new layout", "Shared icon registry", "Food Safety pages on new design"]
+    },
+    {
+      "key": "cutover", "frame": "finish", "x": 19, "y": 25, "title": "Phase 9 — Integration & Cutover", "inRepo": false,
+      "notes": "Gate: every module passed staging sign-off.",
+      "tasks": [
+        "Cross-module links tested on staging", "Load test: ingest, PDFs, print log", "Cloudflare WAF rules final",
+        "Audit log verified", "Migrate data from old app", "Parallel run with old app",
+        "Runbooks written", "UAT sign-off per module", "Production go-live"
+      ]
+    },
+    {
+      "key": "tech_debt", "frame": "finish", "x": 28, "y": 25, "title": "Tech debt", "inRepo": true,
+      "notes": "From docs/AI_HANDOFF.md 'Known risks' and 'Deferred'.",
+      "tasks": [
+        "Fix PROGRESS.md commit hook", "Merge the two requireAuth copies", "Fix stale comment in ingest route",
+        "Update AGENTS.md module status table", "Sort out empty main branch"
+      ]
+    }
+  ],
+  "notes": [
+    { "x": 37, "y": 25, "text": "Deferred / TBC: Maintenance dashboard · Pest control · Full admin panel" }
+  ],
+  "links": [
+    { "from": "foundation", "to": "tempmon" },
+    { "from": "foundation", "to": "food_safety" },
+    { "from": "foundation", "to": "labels" },
+    { "from": "tempmon", "to": "food_safety", "label": "monthly report" },
+    { "from": "food_safety", "to": "iso", "label": "shares engine" },
+    { "from": "food_safety", "to": "walkabout", "label": "NC records" },
+    { "from": "inventory", "to": "labels", "label": "shelf life" },
+    { "from": "food_safety", "to": "cutover" },
+    { "from": "tempmon", "to": "cutover" },
+    { "from": "labels", "to": "cutover" }
+  ]
+}

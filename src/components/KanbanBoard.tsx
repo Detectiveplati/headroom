@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { Task, Column, ColumnId, Priority, BoardFilter, AppSettings, TaskContext, TaskColor } from '../types';
 import { KanbanColumn } from './KanbanColumn';
 import { DoneRail } from './DoneRail';
+import { useProjectLookup } from './projects/ProjectLookupContext';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -38,11 +39,13 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onWipViolation,
 }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const { projects } = useProjectLookup();
   const [filter, setFilter] = useState<BoardFilter>({
     search: '',
     priority: 'all',
     tag: 'all',
     context: 'all',
+    project: 'all',
   });
 
   const flowColumns: Column[] = [
@@ -103,6 +106,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       return false;
     }
 
+    // Project filter
+    if (filter.project === 'none' && task.linkedProjectId) return false;
+    if (filter.project !== 'all' && filter.project !== 'none' && task.linkedProjectId !== filter.project) {
+      return false;
+    }
+
     return true;
   });
 
@@ -135,7 +144,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     setDraggedTaskId(null);
   };
 
-  const isFiltered = filter.search !== '' || filter.priority !== 'all' || filter.tag !== 'all';
+  const isFiltered = filter.search !== '' || filter.priority !== 'all' || filter.tag !== 'all' || filter.project !== 'all';
 
   return (
     <div className="flex-1 flex flex-col max-w-[1680px] w-full mx-auto px-4 sm:px-6 py-4 space-y-4">
@@ -198,9 +207,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           </div>
         )}
 
+        {/* Project filter if any projects exist */}
+        {projects.length > 0 && (
+          <select
+            value={filter.project}
+            onChange={(e) => setFilter((f) => ({ ...f, project: e.target.value }))}
+            className="text-xs bg-offwhite-input dark:bg-zinc-950/60 border border-zinc-300/70 dark:border-zinc-800/80 rounded-lg px-2.5 py-1 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="all">All cards</option>
+            <option value="none">No project</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        )}
+
         {isFiltered && (
           <button
-            onClick={() => setFilter({ search: '', priority: 'all', tag: 'all', context: 'all' })}
+            onClick={() => setFilter({ search: '', priority: 'all', tag: 'all', context: 'all', project: 'all' })}
             className="text-[11px] text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 flex items-center gap-1 ml-auto"
           >
             <X className="w-3 h-3" />

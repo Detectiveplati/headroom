@@ -1,0 +1,377 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  BackgroundVariant,
+  Controls,
+  MiniMap,
+  Panel,
+  Edge,
+  Node,
+  NodeChange,
+  Connection,
+  ConnectionMode,
+  MarkerType,
+  applyNodeChanges,
+  useReactFlow,
+  OnBeforeDelete,
+  OnNodeDrag,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { Plus, StickyNote, Frame, Magnet, Maximize2 } from 'lucide-react';
+import { Project, Task, MapNode, MapLink, MapNodeKind } from '../../types';
+import { MAP_GRID, LINK_STYLES, groupTasksByModule, getModuleProgress, isTaskDone, makeId } from '../../utils/projectMap';
+import { ModuleNode, NoteNode, FrameNode } from './MapNodes';
+
+const NODE_TYPES = { module: ModuleNode, note: NoteNode, frame: FrameNode };
+
+interface ProjectCanvasProps {
+  project: Project;
+  tasks: Task[];
+  selectedNodeId: string | null;
+  focusNodeId: string | null;
+  onFocusHandled: () => void;
+  onSelectModule: (nodeId: string | null) => void;
+  onUpdateProject: (update: (p: Project) => Project) => void;
+}
+
+function useIsDarkMode(): boolean {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+// Lines without chosen sides (e.g. imported) attach on the sides facing each other
+function facingHandles(from: MapNode | undefined, to: MapNode | undefined): [string, string] {
+  if (!from || !to) return ['r', 'l'];
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? ['r', 'l'] : ['l', 'r'];
+  return dy >= 0 ? ['b', 't'] : ['t', 'b'];
+}
+
+function edgeFromLink(link: MapLink, nodesById: Map<string, MapNode>): Edge {
+  const isBlocks = link.style === 'blocks';
+  const stroke = isBlocks ? '#ef4444' : '#94a3b8';
+  const [autoFrom, autoTo] = facingHandles(nodesById.get(link.fromNodeId), nodesById.get(link.toNodeId));
+  return {
+    id: link.id,
+    source: link.fromNodeId,
+    target: link.toNodeId,
+    sourceHandle: link.fromHandle || autoFrom,
+    targetHandle: link.toHandle || autoTo,
+    label: link.label,
+    style: { stroke, strokeWidth: isBlocks ? 2 : 1.5, strokeDasharray: link.style === 'dashed' ? '6 4' : undefined },
+    markerEnd: { type: MarkerType.ArrowClosed, color: stroke },
+    labelStyle: { fontSize: 10, fill: isBlocks ? '#ef4444' : '#64748b' },
+    labelBgStyle: { fillOpacity: 0.85 },
+  };
+}
+
+function isInside(node: MapNode, frame: MapNode): boolean {
+  const w = frame.width ?? 0;
+  const h = frame.height ?? 0;
+  return node.x >= frame.x && node.y >= frame.y && node.x < frame.x + w && node.y < frame.y + h;
+}
+
+const CanvasInner: React.FC<ProjectCanvasProps> = ({
+  project,
+  tasks,
+  selectedNodeId,
+  focusNodeId,
+  onFocusHandled,
+  onSelectModule,
+  onUpdateProject,
+}) => {
+  const flow = useReactFlow();
+  const isDark = useIsDarkMode();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [snapOn, setSnapOn] = useState(true);
+  const [altHeld, setAltHeld] = useState(false);
+  // Nodes that ride along while a frame is dragged: id -> position at drag start
+  const frameDragRef = useRef<{ frameStart: { x: number; y: number }; children: Map<string, { x: number; y: number }> } | null>(null);
+
+  // Hold Alt while dragging for fine placement. Pointer events carry the live Alt state,
+  // so a missed keyup (e.g. Alt+3 tab switch) can't leave snapping off.
+  useEffect(() => {
+    const onInput = (e: KeyboardEvent | PointerEvent) => setAltHeld(e.altKey);
+    const onBlur = () => setAltHeld(false);
+    window.addEventListener('keydown', onInput);
+    window.addEventListener('keyup', onInput);
+    window.addEventListener('pointerdown', onInput, true);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onInput);
+      window.removeEventListener('keyup', onInput);
+      window.removeEventListener('pointerdown', onInput, true);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, []);
+
+  const renameNode = useCallback(
+    (nodeId: string, title: string) =>
+      onUpdateProject((p) => ({ ...p, nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, title } : n)) })),
+    [onUpdateProject]
+  );
+
+  // Derived flow nodes; local state only carries in-progress drags and selection
+  const derivedNodes = useMemo<Node[]>(() => {
+    const byModule = groupTasksByModule(tasks, project.id);
+    return project.nodes.map((n): Node => {
+      const base = { id: n.id, position: { x: n.x, y: n.y }, selected: n.id === selectedNodeId };
+      if (n.kind === 'frame') {
+        return {
+          ...base,
+          type: 'frame',
+          zIndex: -1,
+          style: { width: n.width ?? MAP_GRID * 12, height: n.height ?? MAP_GRID * 10 },
+          data: {
+            title: n.title,
+            onRename: (title: string) => renameNode(n.id, title),
+            onResized: (s: { x: number; y: number; width: number; height: number }) =>
+              onUpdateProject((p) => ({ ...p, nodes: p.nodes.map((x) => (x.id === n.id ? { ...x, ...s } : x)) })),
+          },
+        };
+      }
+      if (n.kind === 'note') {
+        return { ...base, type: 'note', data: { title: n.title, onRename: (title: string) => renameNode(n.id, title) } };
+      }
+      const moduleTasks = byModule.get(n.id) || [];
+      return {
+        ...base,
+        type: 'module',
+        data: {
+          title: n.title,
+          color: project.color,
+          progress: getModuleProgress(n, moduleTasks),
+          openTasks: moduleTasks.filter((t) => !isTaskDone(t)),
+          onToggleManualDone: () =>
+            onUpdateProject((p) => ({
+              ...p,
+              nodes: p.nodes.map((x) => (x.id === n.id ? { ...x, isDoneManual: !x.isDoneManual || undefined } : x)),
+            })),
+        },
+      };
+    });
+  }, [project, tasks, selectedNodeId, renameNode, onUpdateProject]);
+
+  const [nodes, setNodes] = useState<Node[]>(derivedNodes);
+  useEffect(() => setNodes(derivedNodes), [derivedNodes]);
+
+  const edges = useMemo(() => {
+    const nodesById = new Map(project.nodes.map((n) => [n.id, n]));
+    return project.links.map((l) => edgeFromLink(l, nodesById));
+  }, [project.links, project.nodes]);
+
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodes((prev) => applyNodeChanges(changes, prev));
+  }, []);
+
+  const onNodeDragStart: OnNodeDrag = useCallback(
+    (_, node) => {
+      const frame = project.nodes.find((n) => n.id === node.id && n.kind === 'frame');
+      if (!frame) {
+        frameDragRef.current = null;
+        return;
+      }
+      const children = new Map<string, { x: number; y: number }>();
+      project.nodes.forEach((n) => {
+        if (n.id !== frame.id && n.kind !== 'frame' && isInside(n, frame)) children.set(n.id, { x: n.x, y: n.y });
+      });
+      frameDragRef.current = { frameStart: { x: frame.x, y: frame.y }, children };
+    },
+    [project.nodes]
+  );
+
+  const onNodeDrag: OnNodeDrag = useCallback((_, node) => {
+    const drag = frameDragRef.current;
+    if (!drag) return;
+    const dx = node.position.x - drag.frameStart.x;
+    const dy = node.position.y - drag.frameStart.y;
+    setNodes((prev) =>
+      prev.map((n) => {
+        const start = drag.children.get(n.id);
+        return start ? { ...n, position: { x: start.x + dx, y: start.y + dy } } : n;
+      })
+    );
+  }, []);
+
+  // Positions are saved once, on drag end
+  const onNodeDragStop: OnNodeDrag = useCallback(
+    (_, node, dragged) => {
+      const moved = new Map<string, { x: number; y: number }>();
+      dragged.forEach((n) => moved.set(n.id, n.position));
+      moved.set(node.id, node.position);
+      const drag = frameDragRef.current;
+      if (drag) {
+        const dx = node.position.x - drag.frameStart.x;
+        const dy = node.position.y - drag.frameStart.y;
+        drag.children.forEach((start, id) => moved.set(id, { x: start.x + dx, y: start.y + dy }));
+      }
+      frameDragRef.current = null;
+      onUpdateProject((p) => ({
+        ...p,
+        nodes: p.nodes.map((n) => {
+          const pos = moved.get(n.id);
+          return pos ? { ...n, x: Math.round(pos.x), y: Math.round(pos.y) } : n;
+        }),
+      }));
+    },
+    [onUpdateProject]
+  );
+
+  const onConnect = useCallback(
+    (c: Connection) => {
+      if (!c.source || !c.target || c.source === c.target) return;
+      const link: MapLink = {
+        id: makeId('link'),
+        fromNodeId: c.source,
+        toNodeId: c.target,
+        fromHandle: c.sourceHandle || undefined,
+        toHandle: c.targetHandle || undefined,
+        style: 'plain',
+      };
+      onUpdateProject((p) => ({ ...p, links: [...p.links, link] }));
+    },
+    [onUpdateProject]
+  );
+
+  // Keyboard delete removes lines, notes and frames; modules are deleted from their panel
+  // so the user can choose what happens to their cards.
+  const onBeforeDelete: OnBeforeDelete = useCallback(async ({ nodes: delNodes, edges: delEdges }) => {
+    const deletable = delNodes.filter((n) => n.type !== 'module');
+    return { nodes: deletable, edges: delEdges };
+  }, []);
+
+  const onDelete = useCallback(
+    ({ nodes: delNodes, edges: delEdges }: { nodes: Node[]; edges: Edge[] }) => {
+      const nodeIds = new Set(delNodes.map((n) => n.id));
+      const edgeIds = new Set(delEdges.map((e) => e.id));
+      onUpdateProject((p) => ({
+        ...p,
+        nodes: p.nodes.filter((n) => !nodeIds.has(n.id)),
+        links: p.links.filter((l) => !edgeIds.has(l.id) && !nodeIds.has(l.fromNodeId) && !nodeIds.has(l.toNodeId)),
+      }));
+    },
+    [onUpdateProject]
+  );
+
+  const updateLink = useCallback(
+    (linkId: string, update: (l: MapLink) => MapLink) =>
+      onUpdateProject((p) => ({ ...p, links: p.links.map((l) => (l.id === linkId ? update(l) : l)) })),
+    [onUpdateProject]
+  );
+
+  const addNode = (kind: MapNodeKind) => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    const center = flow.screenToFlowPosition({
+      x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+      y: rect ? rect.top + rect.height / 2 : window.innerHeight / 2,
+    });
+    const snap = (v: number) => Math.round(v / MAP_GRID) * MAP_GRID;
+    const node: MapNode = {
+      id: makeId('node'),
+      kind,
+      title: kind === 'module' ? 'New module' : kind === 'frame' ? 'New frame' : '',
+      x: snap(center.x - (kind === 'frame' ? MAP_GRID * 8 : MAP_GRID * 4)),
+      y: snap(center.y - MAP_GRID * 2),
+      ...(kind === 'frame' ? { width: MAP_GRID * 16, height: MAP_GRID * 10 } : {}),
+    };
+    onUpdateProject((p) => ({ ...p, nodes: [...p.nodes, node] }));
+    if (kind === 'module') onSelectModule(node.id);
+  };
+
+  // Centre on a module when arriving from a board card's "Open in map"
+  useEffect(() => {
+    if (!focusNodeId) return;
+    const node = project.nodes.find((n) => n.id === focusNodeId);
+    if (node) {
+      flow.setCenter(node.x + MAP_GRID * 4, node.y + MAP_GRID * 2, { zoom: 1.2, duration: 400 });
+      onSelectModule(node.id);
+    }
+    onFocusHandled();
+  }, [focusNodeId, project.nodes, flow, onSelectModule, onFocusHandled]);
+
+  const toolButton =
+    'px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 transition border';
+  const idleTool =
+    'bg-offwhite-surface dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800';
+
+  return (
+    <div ref={wrapperRef} className="absolute inset-0">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={NODE_TYPES}
+        onNodesChange={onNodesChange}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        onNodeClick={(_, node) => onSelectModule(node.type === 'module' ? node.id : null)}
+        onPaneClick={() => onSelectModule(null)}
+        onConnect={onConnect}
+        onBeforeDelete={onBeforeDelete}
+        onDelete={onDelete}
+        onEdgeDoubleClick={(_, edge) => {
+          const link = project.links.find((l) => l.id === edge.id);
+          if (!link) return;
+          const label = window.prompt('Line label (leave empty for none)', link.label || '');
+          if (label !== null) updateLink(link.id, (l) => ({ ...l, label: label.trim() || undefined }));
+        }}
+        onEdgeContextMenu={(e, edge) => {
+          e.preventDefault();
+          updateLink(edge.id, (l) => ({ ...l, style: LINK_STYLES[(LINK_STYLES.indexOf(l.style) + 1) % LINK_STYLES.length] }));
+        }}
+        connectionMode={ConnectionMode.Loose}
+        snapToGrid={snapOn && !altHeld}
+        snapGrid={[MAP_GRID, MAP_GRID]}
+        colorMode={isDark ? 'dark' : 'light'}
+        minZoom={0.15}
+        maxZoom={2}
+        fitView
+        fitViewOptions={{ padding: 0.15 }}
+        proOptions={{ hideAttribution: true }}
+        deleteKeyCode={['Backspace', 'Delete']}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={MAP_GRID} size={1} />
+        <Controls showInteractive={false} />
+        <MiniMap pannable zoomable className="!hidden sm:!block" nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? '#fcd34d' : project.color)} />
+        <Panel position="top-left" className="flex flex-wrap items-center gap-1.5">
+          <button onClick={() => addNode('module')} className={`${toolButton} bg-brand-600 hover:bg-brand-500 border-brand-600 text-white`}>
+            <Plus className="w-3.5 h-3.5" /> Module
+          </button>
+          <button onClick={() => addNode('note')} className={`${toolButton} ${idleTool}`}>
+            <StickyNote className="w-3.5 h-3.5 text-amber-500" /> Note
+          </button>
+          <button onClick={() => addNode('frame')} className={`${toolButton} ${idleTool}`}>
+            <Frame className="w-3.5 h-3.5" /> Frame
+          </button>
+          <button
+            onClick={() => setSnapOn((s) => !s)}
+            title="Snap to grid (hold Alt while dragging to place freely)"
+            className={`${toolButton} ${snapOn ? 'bg-brand-500/15 border-brand-500/40 text-brand-700 dark:text-brand-300' : idleTool}`}
+          >
+            <Magnet className="w-3.5 h-3.5" /> Snap
+          </button>
+          <button onClick={() => flow.fitView({ padding: 0.15, duration: 300 })} className={`${toolButton} ${idleTool}`} title="Fit everything in view">
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        </Panel>
+        <Panel position="bottom-right" className="!mb-2 hidden md:block text-[10px] text-zinc-400 dark:text-zinc-500 bg-offwhite-surface/80 dark:bg-zinc-900/80 px-2 py-1 rounded-md">
+          Drag from a box edge to draw a line · double-click a line to label it · right-click to cycle plain / dashed / blocks · select + Delete to remove
+        </Panel>
+      </ReactFlow>
+    </div>
+  );
+};
+
+export const ProjectCanvas: React.FC<ProjectCanvasProps> = (props) => (
+  <ReactFlowProvider>
+    <CanvasInner {...props} />
+  </ReactFlowProvider>
+);

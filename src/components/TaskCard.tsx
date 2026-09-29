@@ -24,6 +24,7 @@ import { Task, ColumnId, TaskColor } from '../types';
 import { TASK_COLORS, TASK_COLOR_LIST, getTaskColorConfig } from '../utils/cardColors';
 import { AiBeautifyButton } from './AiBeautifyButton';
 import { CalendarButton } from './CalendarButton';
+import { useProjectLookup } from './projects/ProjectLookupContext';
 
 interface TaskCardProps {
   task: Task;
@@ -57,6 +58,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [showSubtasks, setShowSubtasks] = useState(task.columnId === 'doing');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [localSeconds, setLocalSeconds] = useState(task.elapsedSeconds || 0);
+  const { getTaskProject, onOpenInMap } = useProjectLookup();
 
   useEffect(() => {
     setLocalSeconds(task.elapsedSeconds || 0);
@@ -123,6 +125,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   };
 
+  const projectInfo = getTaskProject(task);
   const isDoingTask = task.columnId === 'doing';
   const colorCfg = getTaskColorConfig(task.color);
   const hasCustomColor = task.color && task.color !== 'default';
@@ -145,6 +148,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       draggable
       onDragStart={(e) => onDragStart(e, task.id)}
       className={`group relative rounded-xl transition-all duration-200 cursor-grab active:cursor-grabbing border select-none ${getCardClasses()}`}
+      style={projectInfo ? { borderLeft: `4px solid ${projectInfo.color}` } : undefined}
     >
       <div className="p-3.5 space-y-2.5">
         {/* Card Header: Drag handle, Priority, Context badge & Actions */}
@@ -179,11 +183,19 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
 
             {/* Project Module Link Badge */}
-            {task.linkedProjectId && (
-              <span className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20" title="Synchronized with Project Management module">
-                <FolderGit2 className="w-2.5 h-2.5" />
-                Project
-              </span>
+            {projectInfo && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenInMap(projectInfo.projectId, projectInfo.nodeId);
+                }}
+                className="inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-0.5 rounded border max-w-[180px] hover:brightness-110 transition"
+                style={{ color: projectInfo.color, backgroundColor: `${projectInfo.color}1a`, borderColor: `${projectInfo.color}40` }}
+                title="Open in project map"
+              >
+                <FolderGit2 className="w-2.5 h-2.5 shrink-0" />
+                <span className="truncate">{projectInfo.projectName} · {projectInfo.moduleTitle}</span>
+              </button>
             )}
 
             {isFocused && (

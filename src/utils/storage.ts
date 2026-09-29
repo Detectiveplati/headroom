@@ -419,11 +419,10 @@ export function saveStoredUploadLogs(userId: string | undefined, logs: MonthlyAc
   }
 }
 
-export const STARTER_PROJECTS: Project[] = [];
-
 const STORAGE_KEY_STARTER_PURGED = 'headroom_projects_purged_v3';
 
-export function loadStoredProjects(): Project[] {
+/** Raw saved projects; normalizeProjects() in utils/projectMap.ts sanitizes and migrates them. */
+export function loadStoredProjectsRaw(): unknown {
   try {
     // One-time purge of initial sample data to ensure a fresh, clean interface
     const isPurged = localStorage.getItem(STORAGE_KEY_STARTER_PURGED);
@@ -448,64 +447,11 @@ export function loadStoredProjects(): Project[] {
       return [];
     }
 
-    return normalizeProjects(cleaned);
+    return cleaned;
   } catch (e) {
     console.error('Failed to load projects from localStorage', e);
     return [];
   }
-}
-
-/**
- * Defensively sanitize project data loaded from localStorage or the sync API.
- */
-export function normalizeProjects(raw: unknown): Project[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((p) => p && typeof p === 'object')
-    .map((p: any) => ({
-      id: String(p?.id || `proj-${Date.now()}`),
-      name: String(p?.name || 'Untitled Project'),
-      description: String(p?.description || ''),
-      color: String(p?.color || '#6366f1'),
-      createdAt: Number(p?.createdAt) || Date.now(),
-      updatedAt: Number(p?.updatedAt) || Date.now(),
-      modules: Array.isArray(p?.modules)
-        ? p.modules.map((m: any) => ({
-            id: String(m?.id || `mod-${Date.now()}`),
-            projectId: String(m?.projectId || p?.id),
-            name: String(m?.name || 'Untitled Module'),
-            summary: String(m?.summary || ''),
-            status: ['planning', 'in-progress', 'review', 'shipped'].includes(m?.status)
-              ? m.status
-              : 'planning',
-            version: m?.version ? String(m.version) : undefined,
-            techStack: Array.isArray(m?.techStack) ? m.techStack.map(String) : [],
-            notes: m?.notes ? String(m.notes) : undefined,
-            updatedAt: Number(m?.updatedAt) || Date.now(),
-            doneItems: Array.isArray(m?.doneItems)
-              ? m.doneItems.map((item: any) => ({
-                  id: String(item?.id || `scope-${Date.now()}`),
-                  title: String(item?.title || ''),
-                  details: item?.details ? String(item.details) : undefined,
-                  completed: true,
-                  linkedTaskId: item?.linkedTaskId ? String(item.linkedTaskId) : undefined,
-                  createdAt: Number(item?.createdAt) || Date.now(),
-                  completedAt: Number(item?.completedAt) || Date.now(),
-                }))
-              : [],
-            missingItems: Array.isArray(m?.missingItems)
-              ? m.missingItems.map((item: any) => ({
-                  id: String(item?.id || `scope-${Date.now()}`),
-                  title: String(item?.title || ''),
-                  details: item?.details ? String(item.details) : undefined,
-                  completed: false,
-                  linkedTaskId: item?.linkedTaskId ? String(item.linkedTaskId) : undefined,
-                  createdAt: Number(item?.createdAt) || Date.now(),
-                }))
-              : [],
-          }))
-        : [],
-    }));
 }
 
 export function saveStoredProjects(projects: Project[]): void {
