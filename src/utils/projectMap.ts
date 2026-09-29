@@ -1,4 +1,4 @@
-import { Task, Project, MapNode, MapLink, MapNodeKind, MapLinkStyle } from '../types';
+import { Task, Project, MapNode, MapLink, MapNodeKind, MapLinkStyle, MapColor } from '../types';
 
 // Canvas grid size in px. Seed files express positions in grid cells.
 export const MAP_GRID = 24;
@@ -8,7 +8,21 @@ const NODE_KINDS: MapNodeKind[] = ['module', 'note', 'frame'];
 export const LINK_STYLES: MapLinkStyle[] = ['plain', 'dashed', 'blocks'];
 export const HANDLE_IDS = ['t', 'r', 'b', 'l'];
 
-export const PROJECT_COLORS = ['#6366f1', '#EA580C', '#10b981', '#0ea5e9', '#ec4899', '#f59e0b', '#8b5cf6', '#14b8a6'];
+// One clear hue per category, so boxes are easy to tell apart at a glance
+export const MAP_COLORS: { key: MapColor; label: string; hex: string }[] = [
+  { key: 'red', label: 'Red', hex: '#ef4444' },
+  { key: 'orange', label: 'Orange', hex: '#f97316' },
+  { key: 'yellow', label: 'Yellow', hex: '#eab308' },
+  { key: 'green', label: 'Green', hex: '#22c55e' },
+  { key: 'blue', label: 'Blue', hex: '#3b82f6' },
+  { key: 'purple', label: 'Purple', hex: '#a855f7' },
+];
+
+export function mapColorHex(color: MapColor | undefined): string | undefined {
+  return MAP_COLORS.find((c) => c.key === color)?.hex;
+}
+
+export const PROJECT_COLORS =['#6366f1', '#EA580C', '#10b981', '#0ea5e9', '#ec4899', '#f59e0b', '#8b5cf6', '#14b8a6'];
 
 export function makeId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -145,6 +159,7 @@ function normalizeNode(raw: unknown): MapNode | null {
     kind,
     title: str(n.title),
     notes: optionalStr(n.notes),
+    color: mapColorHex(n.color as MapColor) ? (n.color as MapColor) : undefined,
     x: num(n.x),
     y: num(n.y),
     width: n.width !== undefined ? num(n.width) : undefined,

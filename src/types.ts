@@ -86,12 +86,16 @@ export type MapNodeKind = 'module' | 'note' | 'frame';
 
 export type MapLinkStyle = 'plain' | 'dashed' | 'blocks';
 
+// Category colour for a box; unset = the project's colour (modules) or default styling
+export type MapColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+
 // A box on a project's whiteboard. Tasks of a module are Task cards with linkedModuleId = node id.
 export interface MapNode {
   id: string;
   kind: MapNodeKind;
   title: string;
   notes?: string;
+  color?: MapColor;
   x: number;
   y: number;
   width?: number;

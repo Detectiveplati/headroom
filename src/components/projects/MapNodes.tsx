@@ -1,21 +1,51 @@
 import React, { useEffect, useState } from 'react';
-import { Handle, Position, NodeProps, NodeResizer, Node, useStore } from '@xyflow/react';
-import { Check } from 'lucide-react';
-import { Task } from '../../types';
-import { MODULE_WIDTH, MAP_GRID, ModuleProgress } from '../../utils/projectMap';
+import { Handle, Position, NodeProps, NodeResizer, NodeToolbar, Node, useStore } from '@xyflow/react';
+import { Check, X } from 'lucide-react';
+import { Task, MapColor } from '../../types';
+import { MODULE_WIDTH, MAP_GRID, MAP_COLORS, ModuleProgress, mapColorHex } from '../../utils/projectMap';
 
-export interface ModuleNodeData extends Record<string, unknown> {
+interface ColorableData {
+  colorKey?: MapColor;
+  onSetColor: (color: MapColor | undefined) => void;
+}
+
+export interface ModuleNodeData extends Record<string, unknown>, ColorableData {
   title: string;
+  // Project colour, used when the box has no category colour
   color: string;
   progress: ModuleProgress;
   openTasks: Task[];
   onToggleManualDone: () => void;
 }
 
-export interface TextNodeData extends Record<string, unknown> {
+export interface TextNodeData extends Record<string, unknown>, ColorableData {
   title: string;
   onRename: (title: string) => void;
 }
+
+/** Colour swatches shown above the selected box. */
+const ColorToolbar: React.FC<ColorableData & { isVisible: boolean }> = ({ isVisible, colorKey, onSetColor }) => (
+  <NodeToolbar isVisible={isVisible} offset={8}>
+    <div className="nodrag flex items-center gap-1 px-1.5 py-1 rounded-full bg-offwhite-surface dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-md">
+      {MAP_COLORS.map((c) => (
+        <button
+          key={c.key}
+          onClick={() => onSetColor(c.key)}
+          title={c.label}
+          className={`h-5 w-5 rounded-full transition hover:scale-110 ${colorKey === c.key ? 'ring-2 ring-offset-1 ring-zinc-900 dark:ring-white dark:ring-offset-zinc-900' : ''}`}
+          style={{ backgroundColor: c.hex }}
+        />
+      ))}
+      <button
+        onClick={() => onSetColor(undefined)}
+        title="No colour"
+        className={`h-5 w-5 rounded-full border border-zinc-300 dark:border-zinc-600 flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ${!colorKey ? 'ring-2 ring-offset-1 ring-zinc-900 dark:ring-white dark:ring-offset-zinc-900' : ''}`}
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  </NodeToolbar>
+);
 
 export type ModuleFlowNode = Node<ModuleNodeData, 'module'>;
 export type NoteFlowNode = Node<TextNodeData, 'note'>;
@@ -38,14 +68,22 @@ export const ModuleNode: React.FC<NodeProps<ModuleFlowNode>> = ({ data, selected
   const { done, total, isDone } = data.progress;
   const pct = total > 0 ? Math.round((done / total) * 100) : isDone ? 100 : 0;
   const showTasks = zoom >= 1.1 && data.openTasks.length > 0;
+  const category = mapColorHex(data.colorKey);
 
   return (
     <div
-      style={{ width: MODULE_WIDTH, borderTopColor: data.color }}
+      style={{
+        width: MODULE_WIDTH,
+        borderTopColor: category ?? data.color,
+        // Category tint layered over the card background so light and dark themes both work
+        backgroundImage: category ? `linear-gradient(${category}1f, ${category}1f)` : undefined,
+        borderColor: category && !selected ? `${category}80` : undefined,
+      }}
       className={`rounded-xl border border-t-4 bg-offwhite-card dark:bg-[#151821] shadow-sm transition-shadow ${
         selected ? 'border-brand-500 ring-2 ring-brand-500/40 shadow-md' : 'border-zinc-300/80 dark:border-zinc-700/80'
       } ${isDone ? 'opacity-80' : ''}`}
     >
+      <ColorToolbar isVisible={!!selected} colorKey={data.colorKey} onSetColor={data.onSetColor} />
       <SideHandles />
       <div className="p-2.5 space-y-2">
         <div className="flex items-start gap-2">
@@ -108,14 +146,20 @@ function useInlineEdit(title: string, onRename: (title: string) => void) {
 
 export const NoteNode: React.FC<NodeProps<NoteFlowNode>> = ({ data, selected }) => {
   const edit = useInlineEdit(data.title, data.onRename);
+  const noteColor = mapColorHex(data.colorKey);
   return (
     <div
       onDoubleClick={edit.start}
       className={`w-full h-full min-w-[120px] min-h-[48px] rounded-lg bg-amber-100 dark:bg-amber-900/40 border shadow-sm p-2.5 ${
         selected ? 'border-amber-500 ring-2 ring-amber-500/40' : 'border-amber-300 dark:border-amber-700/60'
       }`}
-      style={{ maxWidth: MAP_GRID * 12 }}
+      style={{
+        maxWidth: MAP_GRID * 12,
+        // A category colour replaces the default yellow sticky
+        ...(noteColor ? { backgroundColor: `${noteColor}33`, borderColor: noteColor } : {}),
+      }}
     >
+      <ColorToolbar isVisible={!!selected} colorKey={data.colorKey} onSetColor={data.onSetColor} />
       <SideHandles />
       {edit.isEditing ? (
         <textarea
@@ -149,8 +193,10 @@ export interface FrameNodeExtra {
 
 export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, 'frame'>>> = ({ data, selected }) => {
   const edit = useInlineEdit(data.title, data.onRename);
+  const frameColor = mapColorHex(data.colorKey);
   return (
     <>
+      <ColorToolbar isVisible={!!selected} colorKey={data.colorKey} onSetColor={data.onSetColor} />
       <NodeResizer
         isVisible={selected}
         minWidth={MAP_GRID * 6}
@@ -163,8 +209,9 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
         className={`w-full h-full rounded-2xl border-2 border-dashed bg-zinc-500/[0.04] dark:bg-white/[0.02] ${
           selected ? 'border-brand-500/70' : 'border-zinc-300 dark:border-zinc-700'
         }`}
+        style={frameColor ? { borderColor: selected ? undefined : `${frameColor}99`, backgroundColor: `${frameColor}0f` } : undefined}
       >
-        <div onDoubleClick={edit.start} className="px-3 py-1.5">
+        <div onDoubleClick={edit.start} className="px-3 py-1.5" style={frameColor ? { color: frameColor } : undefined}>
           {edit.isEditing ? (
             <input
               autoFocus
@@ -178,7 +225,7 @@ export const FrameNode: React.FC<NodeProps<Node<TextNodeData & FrameNodeExtra, '
               className="nodrag text-xs font-bold uppercase tracking-wider bg-transparent text-zinc-700 dark:text-zinc-300 focus:outline-none"
             />
           ) : (
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 select-none">
+            <span className={`text-xs font-bold uppercase tracking-wider select-none ${frameColor ? '' : 'text-zinc-500 dark:text-zinc-400'}`}>
               {data.title || 'Frame'}
             </span>
           )}

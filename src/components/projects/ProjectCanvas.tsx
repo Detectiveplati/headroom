@@ -17,11 +17,12 @@ import {
   useReactFlow,
   OnBeforeDelete,
   OnNodeDrag,
+  OnConnectEnd,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Plus, StickyNote, Frame, Magnet, Maximize2 } from 'lucide-react';
-import { Project, Task, MapNode, MapLink, MapNodeKind } from '../../types';
-import { MAP_GRID, LINK_STYLES, groupTasksByModule, getModuleProgress, isTaskDone, makeId } from '../../utils/projectMap';
+import { Project, Task, MapNode, MapLink, MapNodeKind, MapColor } from '../../types';
+import { MAP_GRID, LINK_STYLES, groupTasksByModule, getModuleProgress, isTaskDone, makeId, mapColorHex } from '../../utils/projectMap';
 import { ModuleNode, NoteNode, FrameNode } from './MapNodes';
 
 const NODE_TYPES = { module: ModuleNode, note: NoteNode, frame: FrameNode };
@@ -119,11 +120,18 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     [onUpdateProject]
   );
 
+  const setNodeColor = useCallback(
+    (nodeId: string, color: MapColor | undefined) =>
+      onUpdateProject((p) => ({ ...p, nodes: p.nodes.map((n) => (n.id === nodeId ? { ...n, color } : n)) })),
+    [onUpdateProject]
+  );
+
   // Derived flow nodes; local state only carries in-progress drags and selection
   const derivedNodes = useMemo<Node[]>(() => {
     const byModule = groupTasksByModule(tasks, project.id);
     return project.nodes.map((n): Node => {
       const base = { id: n.id, position: { x: n.x, y: n.y }, selected: n.id === selectedNodeId };
+      const colorProps = { colorKey: n.color, onSetColor: (color: MapColor | undefined) => setNodeColor(n.id, color) };
       if (n.kind === 'frame') {
         return {
           ...base,
@@ -131,6 +139,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           zIndex: -1,
           style: { width: n.width ?? MAP_GRID * 12, height: n.height ?? MAP_GRID * 10 },
           data: {
+            ...colorProps,
             title: n.title,
             onRename: (title: string) => renameNode(n.id, title),
             onResized: (s: { x: number; y: number; width: number; height: number }) =>
@@ -139,13 +148,14 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         };
       }
       if (n.kind === 'note') {
-        return { ...base, type: 'note', data: { title: n.title, onRename: (title: string) => renameNode(n.id, title) } };
+        return { ...base, type: 'note', data: { ...colorProps, title: n.title, onRename: (title: string) => renameNode(n.id, title) } };
       }
       const moduleTasks = byModule.get(n.id) || [];
       return {
         ...base,
         type: 'module',
         data: {
+          ...colorProps,
           title: n.title,
           color: project.color,
           progress: getModuleProgress(n, moduleTasks),
@@ -158,10 +168,19 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         },
       };
     });
-  }, [project, tasks, selectedNodeId, renameNode, onUpdateProject]);
+  }, [project, tasks, selectedNodeId, renameNode, setNodeColor, onUpdateProject]);
 
   const [nodes, setNodes] = useState<Node[]>(derivedNodes);
-  useEffect(() => setNodes(derivedNodes), [derivedNodes]);
+  // Modules follow selectedNodeId; notes and frames keep their canvas selection across rebuilds
+  // (e.g. after picking a colour) so their toolbar stays open.
+  useEffect(
+    () =>
+      setNodes((prev) => {
+        const wasSelected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
+        return derivedNodes.map((n) => (n.type !== 'module' && wasSelected.has(n.id) ? { ...n, selected: true } : n));
+      }),
+    [derivedNodes]
+  );
 
   const edges = useMemo(() => {
     const nodesById = new Map(project.nodes.map((n) => [n.id, n]));
@@ -225,20 +244,41 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
     [onUpdateProject]
   );
 
-  const onConnect = useCallback(
-    (c: Connection) => {
-      if (!c.source || !c.target || c.source === c.target) return;
-      const link: MapLink = {
-        id: makeId('link'),
-        fromNodeId: c.source,
-        toNodeId: c.target,
-        fromHandle: c.sourceHandle || undefined,
-        toHandle: c.targetHandle || undefined,
-        style: 'plain',
-      };
-      onUpdateProject((p) => ({ ...p, links: [...p.links, link] }));
+  // Sides are left unset so every line attaches where the two boxes face each other,
+  // and re-routes as boxes move.
+  const addLink = useCallback(
+    (fromNodeId: string, toNodeId: string) => {
+      if (fromNodeId === toNodeId) return;
+      onUpdateProject((p) => {
+        if (p.links.some((l) => l.fromNodeId === fromNodeId && l.toNodeId === toNodeId)) return p;
+        const link: MapLink = { id: makeId('link'), fromNodeId, toNodeId, style: 'plain' };
+        return { ...p, links: [...p.links, link] };
+      });
     },
     [onUpdateProject]
+  );
+
+  const onConnect = useCallback(
+    (c: Connection) => {
+      if (c.source && c.target) addLink(c.source, c.target);
+    },
+    [addLink]
+  );
+
+  // Dropping a line anywhere on another box connects to it; no need to hit its small dot
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (event, state) => {
+      if (state.isValid || !state.fromNode) return;
+      const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+      if (!point) return;
+      const target = document
+        .elementsFromPoint(point.clientX, point.clientY)
+        .map((el) => el.closest<HTMLElement>('.react-flow__node'))
+        .find((el) => el && el.dataset.id !== state.fromNode?.id && !el.classList.contains('react-flow__node-frame'));
+      const toNodeId = target?.dataset.id;
+      if (toNodeId) addLink(state.fromNode.id, toNodeId);
+    },
+    [addLink]
   );
 
   // Keyboard delete removes lines, notes and frames; modules are deleted from their panel
@@ -315,6 +355,8 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
         onNodeClick={(_, node) => onSelectModule(node.type === 'module' ? node.id : null)}
         onPaneClick={() => onSelectModule(null)}
         onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
+        connectionRadius={36}
         onBeforeDelete={onBeforeDelete}
         onDelete={onDelete}
         onEdgeDoubleClick={(_, edge) => {
@@ -340,7 +382,11 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
       >
         <Background variant={BackgroundVariant.Dots} gap={MAP_GRID} size={1} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable className="!hidden sm:!block" nodeColor={(n) => (n.type === 'frame' ? 'transparent' : n.type === 'note' ? '#fcd34d' : project.color)} />
+        <MiniMap pannable zoomable className="!hidden sm:!block" nodeColor={(n) => {
+            const category = mapColorHex((n.data as { colorKey?: MapColor }).colorKey);
+            if (n.type === 'frame') return category ? `${category}33` : 'transparent';
+            return category ?? (n.type === 'note' ? '#fcd34d' : project.color);
+          }} />
         <Panel position="top-left" className="flex flex-wrap items-center gap-1.5">
           <button onClick={() => addNode('module')} className={`${toolButton} bg-brand-600 hover:bg-brand-500 border-brand-600 text-white`}>
             <Plus className="w-3.5 h-3.5" /> Module
@@ -363,7 +409,7 @@ const CanvasInner: React.FC<ProjectCanvasProps> = ({
           </button>
         </Panel>
         <Panel position="bottom-right" className="!mb-2 hidden md:block text-[10px] text-zinc-400 dark:text-zinc-500 bg-offwhite-surface/80 dark:bg-zinc-900/80 px-2 py-1 rounded-md">
-          Drag from a box edge to draw a line · double-click a line to label it · right-click to cycle plain / dashed / blocks · select + Delete to remove
+          Drag from a box’s edge dot onto another box to link them · double-click a line to label it · right-click to cycle plain / dashed / blocks · select + Delete to remove
         </Panel>
       </ReactFlow>
     </div>
