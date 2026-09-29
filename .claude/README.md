@@ -28,7 +28,7 @@ These are the Claude Code names for the version-free **deep / standard / fast** 
 
 | Role | Model | Does | Agents |
 |---|---|---|---|
-| **Orchestrator** | **Opus** (the main session) | Understands the request, researches and plans the design, splits the work, reviews every result, makes every decision. | — (run the main session on Opus in the app) |
+| **Orchestrator** | **Sonnet** day-to-day, **Opus** / `opusplan` for categories C–E (the main session) | Understands the request, researches and plans the design, splits the work, reviews every result, makes every decision. | — (run the main session on Opus in the app) |
 | **Implementer** | **Sonnet** | Writes, fixes and reviews code for a clearly scoped job. | `implementer`, `bug-fixer`, `uiux-engineer`, `code-reviewer` |
 | **Grunt work** | **Haiku** | High-volume, well-defined jobs: searching and reading docs or code, gathering sources, build/typecheck runs, checklists and sweeps. | `researcher`, `qa-test-agent`, `code-auditor` (and the built-in `Explore`) |
 

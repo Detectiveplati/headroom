@@ -109,12 +109,12 @@ Rules name **capability tiers**, never specific models. Each tool maps a tier to
 
 | Tier | Job | Claude Code | Codex | Antigravity | Other tools (Copilot, Cursor…) |
 |---|---|---|---|---|---|
-| **deep** | Orchestrate: classify, plan, design, decide, review every result; hard root-cause and security reasoning | `opus` | main session, `model_reasoning_effort = "high"` | `pro` | strongest model offered |
+| **deep** | Plan, design and decide on complex or risky work; unclear root causes; security and data-integrity reasoning; review risky changes. Orchestrates when the main session runs on it | `opus` | inherit model, `model_reasoning_effort = "high"` | `pro` | strongest model offered |
 | **standard** | Hands-on: implement, fix bugs, UI work, code review | `sonnet` | inherit model, `"medium"` | `inherit` | default model |
 | **fast** | High-volume, well-defined: search, gather docs, build/typecheck, checklists, sweeps | `haiku` | inherit model, `"low"` | `flash` | fastest/cheapest model |
 
 1. **No version-specific model ids** (`claude-…-4-5`, `gpt-…`, `gemini-…-pro-…`) in any committed instruction, agent file or config. Use the family alias above; exact ids live only in the user's own tool settings.
-2. **The main session is the deep tier and orchestrates.** Only it delegates; subagents never spawn subagents.
+2. **The main session orchestrates, on whichever tier it runs.** Pick its model by task: standard (`sonnet`) for day-to-day work (categories A, B, F); deep (`opus`, or Claude Code's `opusplan`) for high-risk, architectural or unclear-cause work (C, D, E). A standard-tier main session sends deep-tier jobs (design decisions, root causes, review of risky changes) to a deep-tier agent instead of making those calls itself; in Claude Code, pass `model: opus` on that agent call. A deep-tier main session does not do hands-on work above category A: it hands edits to standard-tier agents and reviews them. A standard-tier main session may make those edits itself, since delegating to its own tier only adds overhead. Either way, searches, builds and sweeps go to fast-tier agents. Only the main session delegates; subagents never spawn subagents.
 3. **Hand work to the lowest tier that can do it reliably.** Fast gathers, deep judges: never act on a fast-tier conclusion without review.
 4. **Escalate one tier for one call** when a job proves harder than expected, instead of a third retry on the same tier. A subagent never escalates itself.
 5. **Tool can't run subagents or pick models?** Still run the phases in order (gather → implement → verify → review) in one session, and name the tier each phase would have used.
@@ -124,7 +124,7 @@ Agent definitions exist per tool: `.claude/agents/*.md` (canonical instructions)
 
 ### Task classification
 
-The main session (deep tier) classifies, plans, splits the work, reviews every result and makes every decision. For anything above category A it does **not** do the hands-on work; that goes to the standard- and fast-tier agents. Background (retry limits, context budget) is in [.claude/README.md](.claude/README.md).
+The main session (standard or deep tier, see rule 2) classifies, plans, splits the work, reviews every result and makes every decision. On the deep tier it does **not** do the hands-on work above category A; that goes to the standard- and fast-tier agents. On the standard tier it may implement directly, and the routing below that names `implementer` / `bug-fixer` / `uiux-engineer` becomes optional; `qa-test-agent`, `code-reviewer` and deep-tier review steps stay mandatory. Background (retry limits, context budget) is in [.claude/README.md](.claude/README.md).
 
 | Category | Description | Example | Mandatory Routing |
 |---|---|---|---|
@@ -138,7 +138,7 @@ The main session (deep tier) classifies, plans, splits the work, reviews every r
 ### Delegation rules for the main session (hard rules, not suggestions)
 
 1. **State the category first.** Before the first edit of a task, say in one line which category it is and which agents it routes to.
-2. **No direct code edits above category A.** For B–F, the main session must not `Edit`/`Write` files under `src/`, `server/`, `server.js` or `vite.config.ts` itself. Hand the edits to the routed agent with file paths, line ranges and the exact change wanted. "It's quicker to do it myself" is not a reason to skip delegation.
+2. **No direct code edits above category A when the main session is deep tier.** For B–F, a deep-tier main session must not `Edit`/`Write` files under `src/`, `server/`, `server.js` or `vite.config.ts` itself. Hand the edits to the routed agent with file paths, line ranges and the exact change wanted. "It's quicker to do it myself" is not a reason to skip delegation.
 3. **Allowed direct edits:** category A changes; a one- or two-line correction to an agent's output caught during review; docs and config (`*.md`, `.claude/`). Anything bigger goes back to the agent.
 4. **Builds and checks go to the fast tier.** `npm run build`, typechecks and pre-commit sweeps run through `qa-test-agent` / `code-auditor`, not the main session. The main session reads their report and decides.
 5. **Lookups go to the fast tier.** Multi-file searches go to `Explore`; outside facts (docs, library options, browser behaviour) go to `researcher`. The main session still reads single known files itself.
