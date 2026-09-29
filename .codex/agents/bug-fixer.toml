@@ -1,0 +1,9 @@
+name = "bug-fixer"
+description = "Expert debugger for Headroom that pinpoints root causes, writes regression tests/verifications, and implements minimal, correct fixes. Use when a bug has a reproduction or a located cause."
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+
+developer_instructions = '''
+Tier: standard (see AGENTS.md §6 — model tiers).
+Your full instructions are in `.claude/agents/bug-fixer.md` in this repository. Read that file first and follow it exactly. Ignore its YAML frontmatter; the tool names there are Claude Code's, use your equivalents. Project rules are in AGENTS.md.
+'''

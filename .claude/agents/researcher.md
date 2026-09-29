@@ -2,7 +2,7 @@
 name: researcher
 description: High-volume gathering for Headroom - searches the web and the repo, reads docs, and returns sourced findings for the orchestrator to judge. Use when a decision needs outside facts (library options, browser/platform behaviour, API docs, prior art). Never edits code.
 tools: Read, Glob, Grep, WebSearch, WebFetch
-model: haiku
+model: haiku  # tier: fast
 permissionMode: plan
 ---
 

@@ -101,18 +101,50 @@ Headroom operates under a **local-first** paradigm:
 
 ---
 
-## 6. Task Classification & Routing Guide
+## 6. Model Tiers, Task Classification & Mandatory Delegation
 
-| Category | Description | Example | Routing & Scope |
+### Model tiers (version-free, all AI tools)
+
+Rules name **capability tiers**, never specific models. Each tool maps a tier to its own model family, so a new model release needs no change to any repo file.
+
+| Tier | Job | Claude Code | Codex | Antigravity | Other tools (Copilot, Cursor…) |
+|---|---|---|---|---|---|
+| **deep** | Orchestrate: classify, plan, design, decide, review every result; hard root-cause and security reasoning | `opus` | main session, `model_reasoning_effort = "high"` | `pro` | strongest model offered |
+| **standard** | Hands-on: implement, fix bugs, UI work, code review | `sonnet` | inherit model, `"medium"` | `inherit` | default model |
+| **fast** | High-volume, well-defined: search, gather docs, build/typecheck, checklists, sweeps | `haiku` | inherit model, `"low"` | `flash` | fastest/cheapest model |
+
+1. **No version-specific model ids** (`claude-…-4-5`, `gpt-…`, `gemini-…-pro-…`) in any committed instruction, agent file or config. Use the family alias above; exact ids live only in the user's own tool settings.
+2. **The main session is the deep tier and orchestrates.** Only it delegates; subagents never spawn subagents.
+3. **Hand work to the lowest tier that can do it reliably.** Fast gathers, deep judges: never act on a fast-tier conclusion without review.
+4. **Escalate one tier for one call** when a job proves harder than expected, instead of a third retry on the same tier. A subagent never escalates itself.
+5. **Tool can't run subagents or pick models?** Still run the phases in order (gather → implement → verify → review) in one session, and name the tier each phase would have used.
+6. When a vendor renames or adds a tier, update this table only.
+
+Agent definitions exist per tool: `.claude/agents/*.md` (canonical instructions), `.codex/agents/*.toml` and `.agents/agents/*.md` (Antigravity). The Codex and Antigravity files are thin pointers to the canonical `.claude/agents/` file, so each agent's instructions live in one place.
+
+### Task classification
+
+The main session (deep tier) classifies, plans, splits the work, reviews every result and makes every decision. For anything above category A it does **not** do the hands-on work; that goes to the standard- and fast-tier agents. Background (retry limits, context budget) is in [.claude/README.md](.claude/README.md).
+
+| Category | Description | Example | Mandatory Routing |
 |---|---|---|---|
-| **A — Trivial** | Copy change, CSS nit, single-file typo | Update keyboard cheat sheet text | Direct single-turn fix. |
-| **B — Scoped Implementation** | Target files identified, clear requirements | Add a priority filter option in `FocusHUD.tsx` | Scoped code changes + verification. |
-| **C — Investigation Required** | Bug with unknown cause or state desync | "Why does timer pause when switching tabs?" | Read-only analysis → targeted fix. |
-| **D — High-Risk State/Sync** | LocalStorage, sync protocol, WIP limit invariants | Changes to `src/utils/sync.ts` or `server/db.js` | Implementation + strict review against invariants. |
-| **E — Architectural Change** | New data model, offline sync redesign, auth system | Introducing IndexedDB or CRDT sync | Design plan artifact → user approval → implementation. |
-| **F — UI/UX Ergonomics** | Focus HUD layout, keyboard interactions, sound effects | Adding audio feedback for subtask completion | Design tuning & ergonomic review. |
+| **A — Trivial** | Copy change, CSS nit, single-file typo | Update keyboard cheat sheet text | Main session edits directly. No agents. |
+| **B — Scoped Implementation** | Target files identified, clear requirements | Add a priority filter option in `FocusHUD.tsx` | `implementer` → `qa-test-agent`. |
+| **C — Investigation Required** | Bug with unknown cause or state desync | "Why does timer pause when switching tabs?" | `Explore` → `bug-fixer` → `qa-test-agent`. |
+| **D — High-Risk State/Sync** | LocalStorage, sync protocol, WIP limit invariants | Changes to `src/utils/sync.ts` or `server/db.js` | `implementer` → `qa-test-agent` → `code-reviewer`. |
+| **E — Architectural Change** | New data model, offline sync redesign, auth system | Introducing IndexedDB or CRDT sync | `researcher` (if needed) → orchestrator writes plan → **user approval** → `implementer` → `qa-test-agent` → `code-reviewer` → `code-auditor`. |
+| **F — UI/UX Ergonomics** | Focus HUD layout, keyboard interactions, sound effects | Adding audio feedback for subtask completion | `uiux-engineer` → `qa-test-agent` → optional `code-reviewer`. |
 
-Which agent and model handles each category (Opus orchestrates and plans, Sonnet implements, Haiku does high-volume grunt work) is defined in [.claude/README.md](.claude/README.md).
+### Delegation rules for the main session (hard rules, not suggestions)
+
+1. **State the category first.** Before the first edit of a task, say in one line which category it is and which agents it routes to.
+2. **No direct code edits above category A.** For B–F, the main session must not `Edit`/`Write` files under `src/`, `server/`, `server.js` or `vite.config.ts` itself. Hand the edits to the routed agent with file paths, line ranges and the exact change wanted. "It's quicker to do it myself" is not a reason to skip delegation.
+3. **Allowed direct edits:** category A changes; a one- or two-line correction to an agent's output caught during review; docs and config (`*.md`, `.claude/`). Anything bigger goes back to the agent.
+4. **Builds and checks go to the fast tier.** `npm run build`, typechecks and pre-commit sweeps run through `qa-test-agent` / `code-auditor`, not the main session. The main session reads their report and decides.
+5. **Lookups go to the fast tier.** Multi-file searches go to `Explore`; outside facts (docs, library options, browser behaviour) go to `researcher`. The main session still reads single known files itself.
+6. **Browser verification stays with the main session.** Subagents cannot see the preview pane, so the orchestrator does the in-browser check after the agents finish.
+7. **Batch UI iterations.** When the user iterates on a UI in rounds, gather each round's changes into one `uiux-engineer` / `implementer` call rather than making them one at a time.
+8. **Parallelise independent jobs** by launching their agents in a single message.
 
 ---
 
@@ -120,7 +152,7 @@ Which agent and model handles each category (Opus orchestrates and plans, Sonnet
 
 Before presenting any changes as complete:
 1. **Self-Review:** Check for unused imports, ensure event listeners (`keydown`, `visibilitychange`) have cleanup return functions in `useEffect`.
-2. **Build Check:** Run `npm run build` to confirm zero TypeScript compilation errors and a clean Vite production bundle.
+2. **Build Check:** Have `qa-test-agent` run `npm run build` (category A: the main session may run it directly) to confirm zero TypeScript compilation errors and a clean Vite production bundle.
 3. **Functional Verification:** Verify that existing core features (HUD timer, WIP limit dialog, confetti burst, cloud sync indicator) remain functional.
 4. **Session Summary (Mandatory):** Conclude your response with the plain-language summary block:
 
@@ -129,5 +161,6 @@ Before presenting any changes as complete:
 ### ✅ What happened
 - [One sentence describing the main change]
 - [Notable details or edge cases handled]
+- [Agents used: which agent did which part, or "none (category A)"]
 - [Build status: verified via npm run build]
 ```

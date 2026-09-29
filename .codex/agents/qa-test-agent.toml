@@ -1,0 +1,9 @@
+name = "qa-test-agent"
+description = "Verification agent for Headroom that runs typecheck, build validations, and smoke tests without altering code. Use after implementation to run the build and report results."
+model_reasoning_effort = "low"
+sandbox_mode = "read-only"
+
+developer_instructions = '''
+Tier: fast (see AGENTS.md §6 — model tiers).
+Your full instructions are in `.claude/agents/qa-test-agent.md` in this repository. Read that file first and follow it exactly. Ignore its YAML frontmatter; the tool names there are Claude Code's, use your equivalents. Project rules are in AGENTS.md.
+'''

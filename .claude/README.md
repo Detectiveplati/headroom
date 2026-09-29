@@ -2,6 +2,8 @@
 
 How agent delegation works in Headroom. Read alongside [AGENTS.md](../AGENTS.md) (coding standards and architectural boundaries).
 
+> This file is **not** loaded into sessions automatically; only `AGENTS.md` is. The binding routing table and delegation rules live in `AGENTS.md` §6. Keep the two in sync when either changes.
+
 ---
 
 ## Core Principle
@@ -21,6 +23,8 @@ Main session (classify) → optional research/plan → scoped implementation →
 ---
 
 ## Model Tiers (orchestrator–worker)
+
+These are the Claude Code names for the version-free **deep / standard / fast** tiers in `AGENTS.md` §6 (`opus`, `sonnet`, `haiku` are aliases that always resolve to the newest model in that family). Codex and Antigravity map the same tiers in `.codex/agents/` and `.agents/agents/`.
 
 | Role | Model | Does | Agents |
 |---|---|---|---|
